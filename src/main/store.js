@@ -74,14 +74,17 @@ class ClipStore {
 
 // 打开磁盘数据库；文件损坏时备份为 .bak 并重建
 function openStore(dbPath) {
-  // 先用独立句柄探测文件可用性，损坏则关闭句柄后备份重建，
-  // 避免重命名仍被打开的文件（Windows 会 EPERM/EBUSY）
+  // 先用独立句柄探测文件可用性；损坏时先关闭句柄再备份重建，
+  // 避免重命名仍被打开的文件（Windows 会 EPERM/EBUSY）。
+  // 注意：catch 先于 finally 执行，关闭必须发生在 catch 内的 rename 之前。
   let probe;
   try {
     probe = new Database(dbPath);
     probe.prepare('SELECT COUNT(*) FROM sqlite_master').get();
   } catch (err) {
     if (dbPath === ':memory:' || !fs.existsSync(dbPath)) throw err;
+    try { probe.close(); } catch { /* 已关闭 */ }
+    probe = null;
     fs.renameSync(dbPath, dbPath + '.bak');
   } finally {
     if (probe) {
