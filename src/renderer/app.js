@@ -101,7 +101,7 @@ function itemRow(item) {
 
 async function refreshAfterMutation() {
   if (state.keyword) {
-    await doSearch();
+    await Promise.all([doSearch(), refreshDays()]);
   } else if (state.selected) {
     await refreshDays();
     selectDay(state.selected);

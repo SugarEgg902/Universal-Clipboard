@@ -29,8 +29,9 @@ class ClipboardWatcher {
     let text;
     try {
       text = this.readText();
-    } catch {
-      return; // 读取失败静默跳过本次
+    } catch (err) {
+      console.error('剪贴板读取失败:', err); // 跳过本次轮询，仅记录日志
+      return;
     }
     if (!text || !text.trim()) return;
     if (text !== this.lastText) {

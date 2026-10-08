@@ -59,6 +59,14 @@ function createTray() {
   tray.setToolTip('剪贴板抽屉柜');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开剪贴板抽屉柜', click: showWindow },
+    {
+      label: '开机自启',
+      type: 'checkbox',
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => {
+        app.setLoginItemSettings({ openAtLogin: item.checked });
+      },
+    },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]));
