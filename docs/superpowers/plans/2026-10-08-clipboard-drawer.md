@@ -383,7 +383,7 @@ class ClipStore {
       'SELECT id, text, created_at FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
     );
     this.searchStmt = this.db.prepare(
-      "SELECT id, text, created_at FROM clips WHERE text LIKE ? ESCAPE '\\' ORDER BY created_at DESC"
+      "SELECT id, text, created_at FROM clips WHERE text LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 200"
     );
     this.getStmt = this.db.prepare('SELECT id, text, created_at FROM clips WHERE id = ?');
     this.deleteStmt = this.db.prepare('DELETE FROM clips WHERE id = ?');
@@ -407,9 +407,11 @@ class ClipStore {
     return this.listByDayStmt.all(start, end);
   }
 
-  // 跨全部历史搜索，LIKE 通配符（%, _）按字面匹配
+  // 跨全部历史搜索，LIKE 通配符（%, _）按字面匹配；空白关键词返回空，最多返回最新 200 条
   search(keyword) {
-    const escaped = String(keyword).replace(/[\\%_]/g, (ch) => '\\' + ch);
+    const kw = String(keyword).trim();
+    if (!kw) return [];
+    const escaped = kw.replace(/[\\%_]/g, (ch) => '\\' + ch);
     return this.searchStmt.all(`%${escaped}%`);
   }
 
@@ -432,23 +434,31 @@ class ClipStore {
   }
 }
 
-// 打开磁盘数据库；文件损坏时备份为 .bak 并重建
+// 打开磁盘数据库；文件损坏时备份为 .bak 并重建。
+// 用独立句柄探测；注意 JS 中 catch 先于 finally 执行，
+// 关闭探测句柄必须发生在 catch 内 rename 之前（Windows 下重命名打开中的文件会 EPERM/EBUSY）。
 function openStore(dbPath) {
+  let probe;
   try {
-    const store = new ClipStore(dbPath);
-    store.db.prepare('SELECT COUNT(*) FROM clips').get(); // 触发损坏检测
-    return store;
+    probe = new Database(dbPath);
+    probe.prepare('SELECT COUNT(*) FROM sqlite_master').get();
   } catch (err) {
-    if (dbPath !== ':memory:' && fs.existsSync(dbPath)) {
-      fs.renameSync(dbPath, dbPath + '.bak');
-      return new ClipStore(dbPath);
+    if (dbPath === ':memory:' || !fs.existsSync(dbPath)) throw err;
+    try { probe.close(); } catch { /* 已关闭 */ }
+    probe = null;
+    fs.renameSync(dbPath, dbPath + '.bak');
+  } finally {
+    if (probe) {
+      try { probe.close(); } catch { /* 已关闭 */ }
     }
-    throw err;
   }
+  return new ClipStore(dbPath);
 }
 
 module.exports = { ClipStore, openStore };
 ```
+
+> **执行期修订（已通过审查，见 055d6cc、32b3217）**：search 增加空白关键词守卫与 LIMIT 200；openStore 改为独立探测句柄并在 rename 前关闭；测试新增空白搜索 ×2 与 210 行上限（时间戳各异）共 3 条，最终 19/19 通过。
 
 - [ ] **Step 4: 运行测试确认通过**
 
