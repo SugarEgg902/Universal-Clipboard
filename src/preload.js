@@ -8,5 +8,5 @@ contextBridge.exposeInMainWorld('api', {
   clearDay: (dateKey) => ipcRenderer.invoke('clipboard:clearDay', dateKey),
   copyClip: (id) => ipcRenderer.invoke('clipboard:copy', id),
   hideWindow: () => ipcRenderer.invoke('window:hide'),
-  onWindowShown: (callback) => ipcRenderer.on('window-shown', callback),
+  onWindowShown: (callback) => ipcRenderer.on('window-shown', () => callback()),
 });
