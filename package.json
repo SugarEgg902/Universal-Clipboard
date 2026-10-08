@@ -1,0 +1,30 @@
+{
+  "name": "clipboard-drawer",
+  "version": "0.1.0",
+  "description": "剪贴板抽屉柜：按日期展示剪贴板历史",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "cross-env ELECTRON_RUN_AS_NODE=1 electron --test tests/",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-rebuild": "^3.2.9"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0"
+  },
+  "build": {
+    "appId": "com.clipboarddrawer.app",
+    "productName": "ClipboardDrawer",
+    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "mac": { "category": "public.app-category.utilities" },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage", "category": "Utility" }
+  }
+}
