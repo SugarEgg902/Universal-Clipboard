@@ -53,6 +53,7 @@ function showWindow() {
 function createTray() {
   const iconPath = path.join(__dirname, '..', '..', 'assets', 'trayTemplate.png');
   const icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) console.error('托盘图标加载失败: ' + iconPath);
   if (process.platform === 'darwin') icon.setTemplateImage(true);
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip('剪贴板抽屉柜');
@@ -61,7 +62,9 @@ function createTray() {
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]));
-  tray.on('click', showWindow);
+  if (process.platform !== 'darwin') {
+    tray.on('click', showWindow);
+  }
 }
 
 app.whenReady().then(() => {
