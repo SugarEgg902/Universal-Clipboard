@@ -67,7 +67,7 @@ cut/
     "cross-env": "^7.0.3",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8",
-    "electron-rebuild": "^3.7.1"
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0"
