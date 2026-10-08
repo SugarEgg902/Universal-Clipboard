@@ -608,13 +608,17 @@ const { getLast7Days, formatLabel } = require('./dates');
 // 注册所有 IPC handler。deps: { store, getWindow }
 function registerIpc({ store, getWindow }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
-  ipcMain.handle('clipboard:listDays', () =>
-    getLast7Days().map((dateKey) => ({
+  // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
+  // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
+  ipcMain.handle('clipboard:listDays', () => {
+    const days = getLast7Days();
+    const todayKey = days[0];
+    return days.map((dateKey) => ({
       dateKey,
-      label: formatLabel(dateKey),
+      label: formatLabel(dateKey, todayKey),
       count: store.countByDay(dateKey),
-    }))
-  );
+    }));
+  });
 
   ipcMain.handle('clipboard:listByDay', (_event, dateKey) => store.listByDay(dateKey));
 
