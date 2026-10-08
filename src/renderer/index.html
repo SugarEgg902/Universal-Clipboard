@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>剪贴板抽屉柜</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <input id="search" type="text" placeholder="搜索剪贴历史…">
+      <nav id="drawers"></nav>
+      <button id="clear-day">清空当天</button>
+    </aside>
+    <main id="content">
+      <header id="content-title"></header>
+      <div id="items"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

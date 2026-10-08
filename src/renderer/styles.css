@@ -1,0 +1,132 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --bg-side: #f5f5f7;
+  --border: #e0e0e3;
+  --text: #1d1d1f;
+  --text-dim: #8e8e93;
+  --hover: #eaeaee;
+  --active-bg: #d9e7ff;
+  --accent: #0a66d8;
+  --danger: #d33;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e20;
+    --bg-side: #262628;
+    --border: #3a3a3e;
+    --text: #e8e8ea;
+    --text-dim: #8e8e93;
+    --hover: #333336;
+    --active-bg: #2c4a75;
+    --accent: #5b9dff;
+    --danger: #ff6b6b;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+#app { display: flex; height: 100vh; }
+
+/* 左侧抽屉栏 */
+#sidebar {
+  width: 190px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-side);
+  border-right: 1px solid var(--border);
+}
+#search {
+  margin: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+#search:focus { border-color: var(--accent); }
+#drawers { flex: 1; overflow-y: auto; padding: 0 8px; }
+.drawer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 9px 12px;
+  margin-bottom: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+.drawer:hover { background: var(--hover); }
+.drawer.active { background: var(--active-bg); font-weight: 600; }
+.drawer-count { color: var(--text-dim); font-size: 12px; }
+#clear-day {
+  margin: 8px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+#clear-day:hover { color: var(--danger); border-color: var(--danger); }
+
+/* 右侧内容区 */
+#content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#content-title {
+  padding: 12px 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+#items { flex: 1; overflow-y: auto; padding: 8px 0; }
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+}
+.item:hover { background: var(--hover); }
+.item-time {
+  color: var(--text-dim);
+  font-size: 12px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.item-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.item-delete {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  visibility: hidden;
+  flex-shrink: 0;
+}
+.item:hover .item-delete { visibility: visible; }
+.item-delete:hover { color: var(--danger); }
+.search-group {
+  padding: 10px 16px 4px;
+  font-weight: 600;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.empty { padding: 40px 16px; text-align: center; color: var(--text-dim); }
