@@ -105,3 +105,23 @@ test('openStore 遇到损坏数据库时备份并重建', () => {
   assert.ok(id > 0);
   assert.ok(fs.existsSync(dbPath + '.bak'));
 });
+
+test('search 空字符串关键词返回空数组', () => {
+  const s = new ClipStore();
+  s.insert('something', at(2026, 10, 8));
+  assert.deepStrictEqual(s.search(''), []);
+});
+
+test('search 纯空白关键词返回空数组', () => {
+  const s = new ClipStore();
+  s.insert('something', at(2026, 10, 8));
+  assert.deepStrictEqual(s.search('   '), []);
+});
+
+test('search 最多返回 200 条且为最新', () => {
+  const s = new ClipStore();
+  for (let i = 0; i < 210; i++) s.insert('bulk ' + i, at(2026, 10, 8));
+  const rows = s.search('bulk');
+  assert.strictEqual(rows.length, 200);
+  assert.ok(rows.some((r) => r.text === 'bulk 209'));
+});
