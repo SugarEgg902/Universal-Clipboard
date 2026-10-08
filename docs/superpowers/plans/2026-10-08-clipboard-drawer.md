@@ -561,6 +561,7 @@ class ClipboardWatcher {
 
   start() {
     if (this.timer) return;
+    this.check(); // 启动时立即采样一次，捕获当前剪贴板
     this.timer = setInterval(() => this.check(), this.intervalMs);
   }
 
