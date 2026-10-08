@@ -2,6 +2,7 @@
   "name": "clipboard-drawer",
   "version": "0.1.0",
   "description": "剪贴板抽屉柜：按日期展示剪贴板历史",
+  "private": true,
   "main": "src/main/index.js",
   "scripts": {
     "start": "electron .",
