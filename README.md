@@ -15,6 +15,23 @@
 - 数据存于本地 SQLite（`userData/clipboard.db`），永久保留
 - 深色/浅色跟随系统；失去焦点自动隐藏
 
+## 片段库与快速粘贴
+
+把常用短语变成"随叫随贴"的片段：
+
+1. 在任意**文本**条目上悬浮，点 📌 打开 Pin 表单；
+2. 可选填**触发词**（1-32 位字母/数字/连字符/下划线，大小写不敏感地唯一）和**分组**（如"工作"）；
+3. 主窗口左侧的 **📌 片段** 抽屉按分组展示全部片段；再次点 📌 可修改或取消 Pin。
+
+按 `Cmd/Ctrl+Shift+;` 随时唤起快速粘贴面板：输入触发词前缀或内容片段即时过滤（触发词命中排前面），`↑↓` 选择、`Enter` 直接粘贴回之前的应用（macOS 需授予"辅助功能"权限；粘贴失败时内容仍在剪贴板，面板会给出提示）。
+
+## 隐私安全区
+
+自动识别疑似密码的内容（长度、字符种类、信息熵多重启发式）。托盘菜单"隐私模式"可随时切换，两种模式都只影响切换后的新剪贴板：
+
+- **记录但打码**（默认）：照常入库，界面以 `••••••••` 显示，点"显示"可临时查看，复制不受影响；
+- **完全不记录**：疑似密码直接跳过，不留任何痕迹。
+
 ## 快捷键
 
 - `Cmd/Ctrl+Shift+V` 全局唤起窗口
@@ -40,6 +57,8 @@ npm run dist       # 完整安装包（mac: dmg / win: nsis / linux: AppImage）
 
 ## 数据位置
 
-- macOS: `~/Library/Application Support/clipboard-drawer/clipboard.db`
-- Windows: `%APPDATA%/clipboard-drawer/clipboard.db`
-- Linux: `~/.config/clipboard-drawer/clipboard.db`
+- macOS: `~/Library/Application Support/clipboard-drawer/`
+- Windows: `%APPDATA%/clipboard-drawer/`
+- Linux: `~/.config/clipboard-drawer/`
+
+其中：`clipboard.db` 为剪贴板历史（SQLite），`images/` 为图片存档，`config.json` 为隐私模式等配置。
