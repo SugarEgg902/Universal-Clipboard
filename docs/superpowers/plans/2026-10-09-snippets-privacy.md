@@ -640,10 +640,11 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster }) 
   );
 
   // Pin（upsert）。触发词冲突/非法返回 { ok:false, error }，由渲染层内联展示
+  // （Task 2 审查修正后 pin 对不存在条目返回 false 而非抛错——映射为 not-found）
   ipcMain.handle('clipboard:pin', (_event, id, trigger, groupName) => {
     try {
-      store.pin(id, trigger, groupName);
-      return { ok: true };
+      const ok = store.pin(id, trigger, groupName);
+      return ok ? { ok: true } : { ok: false, error: '条目不存在' };
     } catch (err) {
       return { ok: false, error: String(err.message || err) };
     }
