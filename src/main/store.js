@@ -33,7 +33,7 @@ class ClipStore {
       "SELECT id, text, created_at, type, image_path, width, height FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 200"
     );
     this.getStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height FROM clips WHERE id = ?'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE id = ?'
     );
     this.deleteStmt = this.db.prepare('DELETE FROM clips WHERE id = ?');
     this.clearDayStmt = this.db.prepare('DELETE FROM clips WHERE created_at >= ? AND created_at < ?');
@@ -52,6 +52,18 @@ class ClipStore {
     this.dayImagesStmt = this.db.prepare(
       "SELECT image_path FROM clips WHERE type = 'image' AND created_at >= ? AND created_at < ?"
     );
+    this.pinStmt = this.db.prepare(
+      'UPDATE clips SET pinned = 1, trigger_word = ?, group_name = ? WHERE id = ?'
+    );
+    this.unpinStmt = this.db.prepare(
+      'UPDATE clips SET pinned = 0, trigger_word = NULL, group_name = NULL WHERE id = ?'
+    );
+    this.triggerConflictStmt = this.db.prepare(
+      'SELECT id FROM clips WHERE pinned = 1 AND trigger_word IS NOT NULL AND lower(trigger_word) = lower(?) AND id != ?'
+    );
+    this.listSnippetsStmt = this.db.prepare(
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE pinned = 1 ORDER BY created_at DESC'
+    );
   }
 
   // 旧库升级：按需补充图片相关列（带默认值，存量行视为文本）
@@ -68,6 +80,15 @@ class ClipStore {
     }
     if (!cols.includes('height')) {
       this.db.exec('ALTER TABLE clips ADD COLUMN height INTEGER');
+    }
+    if (!cols.includes('pinned')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!cols.includes('trigger_word')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN trigger_word TEXT');
+    }
+    if (!cols.includes('group_name')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN group_name TEXT');
     }
   }
 
@@ -144,6 +165,43 @@ class ClipStore {
   countByDay(dateKey) {
     const [start, end] = dayRange(dateKey);
     return this.countByDayStmt.get(start, end).n;
+  }
+
+  // 触发词校验：空/null 合法（仅分组收藏）；否则 1-32 位字母数字连字符下划线
+  normalizeTrigger(trigger) {
+    if (trigger === null || trigger === undefined) return null;
+    const t = String(trigger).trim();
+    if (!t) return null;
+    if (!/^[\w-]{1,32}$/.test(t)) throw new Error('触发词仅允许字母、数字、连字符、下划线（1-32 位）');
+    return t;
+  }
+
+  // Pin 即 upsert：已 Pin 条目再调用 = 修改触发词/分组
+  pin(id, trigger, groupName) {
+    const row = this.getStmt.get(id);
+    if (!row) throw new Error('条目不存在');
+    const t = this.normalizeTrigger(trigger);
+    if (t && this.triggerConflictStmt.get(t, id)) throw new Error('触发词已被占用');
+    const g = groupName ? String(groupName).trim() : null;
+    this.pinStmt.run(t, g || null, id);
+    return true;
+  }
+
+  unpin(id) {
+    this.unpinStmt.run(id);
+    return true;
+  }
+
+  // 所有片段按分组返回：[{ name, items }]，null 组名归为"未分组"，组内 created_at 倒序
+  listSnippets() {
+    const rows = this.listSnippetsStmt.all();
+    const byGroup = new Map();
+    for (const r of rows) {
+      const key = r.group_name || '未分组';
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key).push(r);
+    }
+    return Array.from(byGroup, ([name, items]) => ({ name, items }));
   }
 }
 
