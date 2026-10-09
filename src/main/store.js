@@ -129,8 +129,8 @@ class ClipStore {
     if (this.imageRefsStmt.get(fileName).n > 0) return;
     try {
       fs.unlinkSync(path.join(this.imagesDir, fileName));
-    } catch {
-      // 文件可能已不存在
+    } catch (err) {
+      console.warn('图片文件删除失败:', err); // 行已删，文件残留，仅记录
     }
   }
 

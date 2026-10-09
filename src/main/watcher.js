@@ -1,14 +1,18 @@
-// 轮询系统剪贴板，文本变化时回调 onClip。
-// readText/onClip 由调用方注入，便于测试；主进程注入 electron 的 clipboard.readText。
+// 轮询系统剪贴板：含图片时走 onImage，否则走 onClip（文本）。
+// hasImage/readImage/onImage 可选注入（默认无图片），便于测试；
+// 主进程注入 electron clipboard 的对应操作。
 class ClipboardWatcher {
-  constructor({ readText, onClip, intervalMs = 500 }) {
+  constructor({ hasImage, readImage, readText, onClip, onImage, intervalMs = 500 }) {
     if (typeof readText !== 'function' || typeof onClip !== 'function') {
       throw new Error('ClipboardWatcher 需要 readText 和 onClip 函数');
     }
+    this.hasImage = hasImage || (() => false);
+    this.readImage = readImage || (() => null);
     this.readText = readText;
     this.onClip = onClip;
+    this.onImage = onImage || (() => {});
     this.intervalMs = intervalMs;
-    this.lastText = null;
+    this.lastSig = null;
     this.timer = null;
   }
 
@@ -26,17 +30,30 @@ class ClipboardWatcher {
   }
 
   check() {
-    let text;
+    let sig = null;
+    let payload = null;
+    let handler = null;
     try {
-      text = this.readText();
+      if (this.hasImage()) {
+        const img = this.readImage();
+        if (!img || !img.buffer || !img.buffer.length) return;
+        sig = 'img:' + img.key;
+        payload = img;
+        handler = this.onImage;
+      } else {
+        const text = this.readText();
+        if (!text || !text.trim()) return;
+        sig = 'text:' + text;
+        payload = text;
+        handler = this.onClip;
+      }
     } catch (err) {
       console.error('剪贴板读取失败:', err); // 跳过本次轮询，仅记录日志
       return;
     }
-    if (!text || !text.trim()) return;
-    if (text !== this.lastText) {
-      this.lastText = text;
-      this.onClip(text);
+    if (sig !== this.lastSig) {
+      this.lastSig = sig;
+      handler(payload);
     }
   }
 }
