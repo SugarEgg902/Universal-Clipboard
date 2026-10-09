@@ -178,7 +178,7 @@ if (IS_PALETTE) {
           hit.textContent = text.slice(hlPos, hlPos + item.match_len);
           const afterText = text.slice(hlPos + item.match_len);
           const after = document.createElement('span');
-          after.textContent = truncate(afterText, CONTEXT) + (afterText.length > CONTEXT ? '…' : '');
+          after.textContent = truncate(afterText, CONTEXT); // truncate 自带截断省略号
           preview.append(before, hit, after);
           preview.title = text;
         } else {
