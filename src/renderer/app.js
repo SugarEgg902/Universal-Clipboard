@@ -170,12 +170,15 @@ if (IS_PALETTE) {
           hlPos = item.match_pos;
         }
         if (hlPos >= 0) {
+          const CONTEXT = 30;
+          const winStart = Math.max(0, hlPos - CONTEXT);
           const before = document.createElement('span');
-          before.textContent = text.slice(0, hlPos);
+          before.textContent = (winStart > 0 ? '…' : '') + text.slice(winStart, hlPos);
           const hit = document.createElement('mark');
           hit.textContent = text.slice(hlPos, hlPos + item.match_len);
+          const afterText = text.slice(hlPos + item.match_len);
           const after = document.createElement('span');
-          after.textContent = truncate(text.slice(hlPos + item.match_len), 80);
+          after.textContent = truncate(afterText, CONTEXT) + (afterText.length > CONTEXT ? '…' : '');
           preview.append(before, hit, after);
           preview.title = text;
         } else {
@@ -384,6 +387,7 @@ if (IS_PALETTE) {
   }
 
   function clearSearch() {
+    clearTimeout(searchTimer);
     searchEl.value = '';
     state.keyword = '';
     if (state.selected === SNIPPETS_KEY) selectSnippets();
@@ -452,6 +456,7 @@ if (IS_PALETTE) {
 
   // 窗口每次显示时重置到"今天"并聚焦搜索框
   window.api.onWindowShown(() => {
+    clearTimeout(searchTimer);
     searchEl.value = '';
     state.keyword = '';
     refreshDays().then(() => {
