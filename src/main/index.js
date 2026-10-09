@@ -127,6 +127,7 @@ app.whenReady().then(() => {
     }
   });
 
+  // TODO(Task 5): 替换为真实依赖 getPaletteWindow: () => palette.getWindow(), paster
   registerIpc({ store, getWindow: () => win, imagesDir, getPaletteWindow: () => null, paster: null });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
