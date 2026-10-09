@@ -244,3 +244,16 @@ body.palette .item { padding: 6px 16px; }
   border-top: 1px solid var(--border);
 }
 #palette-hint[hidden] { display: none; }
+
+/* Me-Search：子串命中高亮与匹配徽章 */
+mark {
+  background: var(--active-bg);
+  color: var(--accent);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.item-match-badge {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}

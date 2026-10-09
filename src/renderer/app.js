@@ -159,8 +159,29 @@ if (IS_PALETTE) {
         preview.textContent = '••••••••••';
         preview.title = '已隐藏的密码条目';
       } else {
-        preview.textContent = truncate(item.text);
-        preview.title = item.text;
+        const text = item.text;
+        let hlPos = -1;
+        if (
+          item.match_kind === 'substring' &&
+          item.match_pos != null &&
+          item.match_len != null &&
+          text.length <= 200 // 超长文本不做高亮（截断窗口外的坐标无意义）
+        ) {
+          hlPos = item.match_pos;
+        }
+        if (hlPos >= 0) {
+          const before = document.createElement('span');
+          before.textContent = text.slice(0, hlPos);
+          const hit = document.createElement('mark');
+          hit.textContent = text.slice(hlPos, hlPos + item.match_len);
+          const after = document.createElement('span');
+          after.textContent = truncate(text.slice(hlPos + item.match_len), 80);
+          preview.append(before, hit, after);
+          preview.title = text;
+        } else {
+          preview.textContent = truncate(text);
+          preview.title = text;
+        }
       }
       preview.addEventListener('click', () => window.api.copyClip(item.id));
       row.append(time, preview);
@@ -200,6 +221,18 @@ if (IS_PALETTE) {
         const badge = document.createElement('span');
         badge.className = 'item-trigger';
         badge.textContent = `⌁ ${item.trigger_word}`;
+        row.append(badge);
+      }
+
+      if (item.match_kind === 'pinyin') {
+        const badge = document.createElement('span');
+        badge.className = 'item-match-badge';
+        badge.textContent = '拼音命中';
+        row.append(badge);
+      } else if (item.match_kind === 'fuzzy') {
+        const badge = document.createElement('span');
+        badge.className = 'item-match-badge';
+        badge.textContent = '模糊命中';
         row.append(badge);
       }
     }
@@ -309,34 +342,23 @@ if (IS_PALETTE) {
     const rows = await window.api.search(state.keyword);
     titleEl.textContent = `搜索“${state.keyword}” · ${rows.length} 条`;
     itemsEl.innerHTML = '';
+    state.items = rows; // IPC 已按评分排序，DOM 顺序与之一致（Enter 复制按索引取数据）
     if (!rows.length) {
-      state.items = [];
       itemsEl.innerHTML = '<div class="empty">没有匹配的记录</div>';
       return;
     }
-    const groups = new Map();
-    for (const r of rows) {
-      const key = toDateKey(r.created_at);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(r);
-    }
-    // 扁平数组，顺序与下方分组渲染的文档顺序一致（供 Enter 复制按索引取数据）
-    state.items = [];
-    for (const group of groups.values()) state.items.push(...group);
-    for (const [key, group] of groups) {
-      const h = document.createElement('div');
-      h.className = 'search-group';
-      h.textContent = `${labelFor(key)} · ${group.length} 条`;
-      itemsEl.appendChild(h);
-      for (const item of group) itemsEl.appendChild(itemRow(item));
-    }
+    for (const item of rows) itemsEl.appendChild(itemRow(item));
   }
 
+  let searchTimer = null;
   searchEl.addEventListener('input', () => {
     state.keyword = searchEl.value.trim();
-    if (state.keyword) doSearch();
-    else if (state.selected === SNIPPETS_KEY) selectSnippets();
-    else if (state.selected) selectDay(state.selected);
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      if (state.keyword) doSearch();
+      else if (state.selected === SNIPPETS_KEY) selectSnippets();
+      else if (state.selected) selectDay(state.selected);
+    }, 150);
   });
 
   clearBtn.addEventListener('click', async () => {
