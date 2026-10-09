@@ -496,6 +496,8 @@ git commit -m "feat: 桌宠主进程——常驻透明小窗、气泡 payload、
 
 ## Task 3: 桌宠渲染层（状态机 + 冒泡 + 拖拽）+ 冒烟 + README
 
+> **执行期修订（质量审查修复，commit 3d9e4d6）**：① playAction 的 scheduleAction() 移到 `state !== 'idle'` early-return 之前（原写法下 timer 落在 sleepy/excited/hover 期间即永久停调度）；② 'dragging' class 双保险——CSS 规则移到所有状态类之后（等优先级靠源码顺序压过 .hover 的 lean），整体 className 赋值改走 `applyClass()` 封装（拖拽标志位拼回 class，防状态切换剥掉 dragging）；③ 鼠标事件升级 Pointer Events + `setPointerCapture`（修窗口外 mouseup 拖拽卡死；pointerup 保留 button===0 守卫，右键抬起不误触 petOpenMain）；④ excited 超时回调加状态守卫；动作/excited 结束经 backToIdle() 统一回退，`matches(':hover')` 感知指针仍在吉祥物上则回 hover 而非 idle（state 与 class 保持一致，避免 mouseleave 失效）；⑤ 动作 class 移除超时按 ACTION_MS 真实时长映射（消除动画结束后的僵直空窗）；⑥ pointerdown 加 `e.button !== 0` 守卫（计划参考代码的 bug：右键会 arm drag 并在 mouseup 误开主窗口——实现期自查偏离，审查判定合理保留）；⑦ unhandledrejection 吞噪音（对齐 app.js）；⑧ .bubble.secret 颜色走 CSS 变量（暗色 #aaa）。另实现期补充：`@media (prefers-color-scheme: dark)` 气泡变量覆写（计划明确允许）。冒烟期间用户真实拖拽验证了持久化写路径，剪切板曾被测试密码覆盖（已如实报告用户）。计数不变（86/86）。
+
 **Files:**
 - Create: `src/renderer/pet.html`
 - Create: `src/renderer/pet.js`
