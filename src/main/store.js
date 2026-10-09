@@ -30,10 +30,10 @@ class ClipStore {
       'SELECT id FROM clips WHERE text = ? AND created_at >= ? AND created_at < ?'
     );
     this.listByDayStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
     );
     this.searchStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 200"
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 200"
     );
     this.getStmt = this.db.prepare(
       'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE id = ?'
@@ -185,7 +185,7 @@ class ClipStore {
     if (!row) return false;
     const t = this.normalizeTrigger(trigger);
     if (t && this.triggerConflictStmt.get(t, id)) throw new Error('触发词已被占用');
-    const g = groupName ? String(groupName).trim().slice(0, 64) : null;
+    const g = groupName ? String(groupName).trim().slice(0, 32) : null;
     this.pinStmt.run(t, g || null, id);
     return true;
   }

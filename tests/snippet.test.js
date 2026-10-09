@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 const { ClipStore } = require('../src/main/store');
+const { toDateKey } = require('../src/main/dates');
 
 const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h, 0, 0).getTime();
 
@@ -73,6 +74,20 @@ test('listSnippets 只返回 pinned，按分组，组内时间倒序，null 归�
   assert.deepStrictEqual(un.items.map((r) => r.text), ['b 新', 'a 旧']); // 倒序
   assert.ok(un.items.every((r) => r.pinned === 1));
   assert.ok(groups.flatMap((g) => g.items).every((r) => r.text !== 'not pinned'));
+});
+
+test('listByDay/search 返回 pin 字段（pinned/trigger_word/group_name）', () => {
+  const s = new ClipStore();
+  const id = s.insert('unique-keyword 片段文本', at(2026, 10, 9));
+  s.pin(id, 'ukw', '工作');
+  const dayRow = s.listByDay(toDateKey(at(2026, 10, 9))).find((r) => r.id === id);
+  assert.strictEqual(dayRow.pinned, 1);
+  assert.strictEqual(dayRow.trigger_word, 'ukw');
+  assert.strictEqual(dayRow.group_name, '工作');
+  const searchRow = s.search('unique-keyword').find((r) => r.id === id);
+  assert.strictEqual(searchRow.pinned, 1);
+  assert.strictEqual(searchRow.trigger_word, 'ukw');
+  assert.strictEqual(searchRow.group_name, '工作');
 });
 
 test('旧库迁移：无新列的 v2 库自动 ALTER 且存量行 pinned=0', () => {
