@@ -15,7 +15,10 @@ class ClipStore {
         type TEXT NOT NULL DEFAULT 'text',
         image_path TEXT,
         width INTEGER,
-        height INTEGER
+        height INTEGER,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        trigger_word TEXT,
+        group_name TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_created_at ON clips(created_at);
     `);
@@ -62,7 +65,7 @@ class ClipStore {
       'SELECT id FROM clips WHERE pinned = 1 AND trigger_word IS NOT NULL AND lower(trigger_word) = lower(?) AND id != ?'
     );
     this.listSnippetsStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE pinned = 1 ORDER BY created_at DESC'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE pinned = 1 ORDER BY created_at DESC, id DESC'
     );
   }
 
@@ -176,13 +179,13 @@ class ClipStore {
     return t;
   }
 
-  // Pin 即 upsert：已 Pin 条目再调用 = 修改触发词/分组
+  // Pin 即 upsert：已 Pin 条目再调用 = 修改触发词/分组；条目不存在时幂等返回 false
   pin(id, trigger, groupName) {
     const row = this.getStmt.get(id);
-    if (!row) throw new Error('条目不存在');
+    if (!row) return false;
     const t = this.normalizeTrigger(trigger);
     if (t && this.triggerConflictStmt.get(t, id)) throw new Error('触发词已被占用');
-    const g = groupName ? String(groupName).trim() : null;
+    const g = groupName ? String(groupName).trim().slice(0, 64) : null;
     this.pinStmt.run(t, g || null, id);
     return true;
   }
@@ -192,7 +195,8 @@ class ClipStore {
     return true;
   }
 
-  // 所有片段按分组返回：[{ name, items }]，null 组名归为"未分组"，组内 created_at 倒序
+  // 所有片段按分组返回：[{ name, items }]，null 组名归为"未分组"
+  // 组序 = 各组最新条目出现的先后（SQL 全局倒序后按组收敛）；组内 created_at 倒序，毫秒并列按 id 倒序
   listSnippets() {
     const rows = this.listSnippetsStmt.all();
     const byGroup = new Map();
