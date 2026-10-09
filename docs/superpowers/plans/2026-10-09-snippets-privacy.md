@@ -583,8 +583,10 @@ function withSecret(row) {
 
 const withMeta = (row) => withSecret(withThumb(row));
 
-// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster }
-function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster }) {
+// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp }
+// hideApp：粘贴前辞去应用激活（macOS win.hide() 不 resign activation，
+// 不 hideApp 的话 AppleScript 的 Cmd+V 会发给 Electron 自己被吞掉且 osascript 仍退出 0 = 假成功）
+function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
   // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
   // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
@@ -667,6 +669,9 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster }) 
     if (palette) palette.hide();
     if (!paster) return { ok: false, error: 'unsupported-platform' };
     try {
+      // 辞去激活并把前台还给之前的应用；稍等再注入按键（激活切换是异步投递的）
+      if (hideApp) hideApp();
+      await new Promise((r) => setTimeout(r, 80));
       return await paster.paste();
     } catch (err) {
       console.error('模拟粘贴失败:', err);
@@ -709,8 +714,8 @@ contextBridge.exposeInMainWorld('api', {
 - [ ] **Step 3: index.js registerIpc 调用点更新**
 
 ```js
-  // TODO(Task 5): 替换为真实依赖 getPaletteWindow: () => palette.getWindow(), paster
-  registerIpc({ store, getWindow: () => win, imagesDir, getPaletteWindow: () => null, paster: null });
+  // TODO(Task 5): 替换为真实依赖 getPaletteWindow: () => palette.getWindow(), paster, hideApp: () => app.hide()
+  registerIpc({ store, getWindow: () => win, imagesDir, getPaletteWindow: () => null, paster: null, hideApp: null });
 ```
 
 （Task 5 会把它替换为真实依赖。）
@@ -746,10 +751,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { paste } = require('../src/main/paster');
 
-test('darwin 分支调用 osascript 模拟 Cmd+V', async () => {
+test('darwin 分支调用 osascript 模拟 Cmd+V（带 2s 超时）', async () => {
   const calls = [];
-  const fakeExec = (cmd, args, cb) => {
-    calls.push({ cmd, args });
+  const fakeExec = (cmd, args, opts, cb) => {
+    calls.push({ cmd, args, opts });
     cb(null);
   };
   const res = await paste('darwin', fakeExec);
@@ -758,19 +763,20 @@ test('darwin 分支调用 osascript 模拟 Cmd+V', async () => {
   assert.strictEqual(calls[0].args[0], '-e');
   assert.ok(calls[0].args[1].includes('keystroke "v"'));
   assert.ok(calls[0].args[1].includes('command down'));
+  assert.strictEqual(calls[0].opts.timeout, 2000);
 });
 
 test('osascript 失败返回 paste-failed', async () => {
-  const fakeExec = (_cmd, _args, cb) => cb(new Error('not allowed'));
+  const fakeExec = (_cmd, _args, _opts, cb) => cb(new Error('not allowed'));
   const res = await paste('darwin', fakeExec);
-  assert.deepStrictEqual(res, { ok: false, reason: 'paste-failed' });
+  assert.deepStrictEqual(res, { ok: false, error: 'paste-failed' });
 });
 
 test('非 darwin 平台返回 unsupported-platform 且不执行命令', async () => {
   const calls = [];
-  const fakeExec = (cmd, args, cb) => { calls.push({ cmd, args }); cb(null); };
+  const fakeExec = (cmd, args, opts, cb) => { calls.push({ cmd, args, opts }); cb(null); };
   const res = await paste('win32', fakeExec);
-  assert.deepStrictEqual(res, { ok: false, reason: 'unsupported-platform' });
+  assert.deepStrictEqual(res, { ok: false, error: 'unsupported-platform' });
   assert.strictEqual(calls.length, 0);
 });
 ```
@@ -797,12 +803,15 @@ const MACOS_PASTE_SCRIPT =
 function paste(platform = process.platform, execFileFn = execFile) {
   return new Promise((resolve) => {
     if (platform !== 'darwin') {
-      resolve({ ok: false, reason: 'unsupported-platform' });
+      resolve({ ok: false, error: 'unsupported-platform' });
       return;
     }
-    execFileFn('osascript', ['-e', MACOS_PASTE_SCRIPT], (err) => {
+    // 2s 超时：System Events 卡死时不能让 IPC promise 永远挂起（超时即 err → paste-failed）
+    execFileFn('osascript', ['-e', MACOS_PASTE_SCRIPT], { timeout: 2000 }, (err) => {
       if (err) {
-        resolve({ ok: false, reason: 'paste-failed' });
+        // 最常见原因是未授予辅助功能权限；保留详情便于排查
+        console.error('osascript 失败:', err.message);
+        resolve({ ok: false, error: 'paste-failed' });
         return;
       }
       resolve({ ok: true });
@@ -911,6 +920,7 @@ const paster = require('./paster');
     imagesDir,
     getPaletteWindow: () => palette && palette.getWindow(),
     paster,
+    hideApp: () => app.hide(),
   });
 ```
 
