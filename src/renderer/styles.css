@@ -226,3 +226,21 @@ body {
 #pin-buttons .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 #clear-day:disabled { opacity: 0.4; cursor: default; }
 #clear-day:disabled:hover { color: var(--text-dim); border-color: var(--border); }
+
+/* 快速粘贴面板模式（?palette=1）：隐藏抽屉栏，单列布局 */
+body.palette #sidebar { display: none; }
+body.palette #content-title { font-size: 13px; padding: 8px 16px; }
+body.palette #items { padding: 4px 0; }
+body.palette .item { padding: 6px 16px; }
+#palette-hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--danger);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+#palette-hint[hidden] { display: none; }
