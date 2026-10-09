@@ -8,6 +8,8 @@ const {
 const { openStore } = require('./store');
 const { ClipboardWatcher } = require('./watcher');
 const { registerIpc } = require('./ipc');
+const { looksLikeSecret } = require('./secretDetector');
+const privacyConfig = require('./privacyConfig');
 
 // 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
 // （主机名必须为 non-numeric：standard scheme 下纯数字主机会被 Chromium 归一化为 IPv4）
@@ -79,6 +81,23 @@ function createTray() {
         app.setLoginItemSettings({ openAtLogin: item.checked });
       },
     },
+    {
+      label: '隐私模式',
+      submenu: [
+        {
+          label: '记录但打码',
+          type: 'radio',
+          checked: privacyConfig.getMode() === 'mask',
+          click: () => privacyConfig.setMode('mask'),
+        },
+        {
+          label: '完全不记录',
+          type: 'radio',
+          checked: privacyConfig.getMode() === 'skip',
+          click: () => privacyConfig.setMode('skip'),
+        },
+      ],
+    },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]));
@@ -91,6 +110,7 @@ app.whenReady().then(() => {
   const dbPath = path.join(app.getPath('userData'), 'clipboard.db');
   const imagesDir = path.join(app.getPath('userData'), 'images');
   store = openStore(dbPath, imagesDir);
+  privacyConfig.init(app.getPath('userData'));
 
   protocol.handle('clipimg', async (request) => {
     try {
@@ -129,6 +149,12 @@ app.whenReady().then(() => {
     readText: () => clipboard.readText(),
     onClip: (text) => {
       try {
+        // 检测器本身不 trim（含空白即不判定是对多行内容的严格排除）；
+        // 调用点 trim 以兜住"终端复制带尾换行的密码"这一常见形态。
+        if (privacyConfig.getMode() === 'skip' && looksLikeSecret(String(text).trim())) {
+          console.log('[隐私] 已跳过疑似密码内容（完全不记录模式）');
+          return;
+        }
         store.insert(text);
       } catch (err) {
         console.error('剪贴板写入数据库失败:', err);
