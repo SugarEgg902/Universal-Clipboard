@@ -222,7 +222,15 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (document.activeElement === searchEl) {
-    // 输入框内：可打字、Enter 不复制、↑↓ 交给列表导航
+    // 输入框内：可打字、↑↓ 交给列表导航、Enter 复制选中项（无选中则惰性）
+    if (e.key === 'Enter') {
+      if (state.selectedIndex >= 0) {
+        e.preventDefault();
+        const item = state.items[state.selectedIndex];
+        if (item) window.api.copyClip(item.id);
+      }
+      return;
+    }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   }
 
