@@ -43,8 +43,14 @@ class ClipStore {
     this.listByDayStmt = this.db.prepare(
       'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
     );
-    this.searchStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 200"
+    this.searchTextStmt = this.db.prepare(
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' LIMIT 500"
+    );
+    this.searchPinyinStmt = this.db.prepare(
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND pinyin LIKE ? ESCAPE '\\' LIMIT 500"
+    );
+    this.fuzzyScanStmt = this.db.prepare(
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' ORDER BY created_at DESC, id DESC LIMIT 5000"
     );
     this.getStmt = this.db.prepare(
       'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE id = ?'
@@ -159,12 +165,36 @@ class ClipStore {
     return this.listByDayStmt.all(start, end);
   }
 
-  // 跨全部历史搜索（最多 200 条），LIKE 通配符（%, _）按字面匹配；空白关键词返回空
+  // Me-Search：SQL 子串快路径（text + 罗马查询时的 pinyin）→ 候选 <20 且查询 ≥3 字符 → 最近 5000 行子序列兜底
+  // 评分排序（substring > pinyin > fuzzy，同分新者先），返回 top 50，行附加 score/match_kind/match_pos/match_len
   search(keyword) {
     const kw = String(keyword).trim();
     if (!kw) return [];
-    const escaped = kw.replace(/[\\%_]/g, (ch) => '\\' + ch);
-    return this.searchStmt.all(`%${escaped}%`);
+    const lower = kw.toLowerCase();
+    const escaped = lower.replace(/[\\%_]/g, (ch) => '\\' + ch);
+
+    const byId = new Map();
+    for (const r of this.searchTextStmt.all(`%${escaped}%`)) byId.set(r.id, r);
+    if (/^[a-z0-9]+$/.test(lower)) {
+      for (const r of this.searchPinyinStmt.all(`%${escaped}%`)) byId.set(r.id, r);
+    }
+
+    const scored = [];
+    for (const r of byId.values()) {
+      const s = scoreRow(r, lower);
+      if (s) scored.push({ ...r, ...s });
+    }
+
+    if (scored.length < 20 && lower.length >= 3) {
+      for (const r of this.fuzzyScanStmt.all()) {
+        if (byId.has(r.id)) continue;
+        const s = scoreRow(r, lower);
+        if (s && s.match_kind === 'fuzzy') scored.push({ ...r, ...s });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score || b.created_at - a.created_at || b.id - a.id);
+    return scored.slice(0, 50);
   }
 
   get(id) {
@@ -240,6 +270,31 @@ class ClipStore {
   }
 }
 
+// Me-Search 评分：substring(100+位置加成) > pinyin(90+位置加成) > fuzzy(80−跨度惩罚)；无命中 null
+function scoreRow(r, kw) {
+  const text = r.text.toLowerCase();
+  const pos = text.indexOf(kw);
+  if (pos >= 0) {
+    return { score: 100 + Math.max(0, 50 - pos), match_kind: 'substring', match_pos: pos, match_len: kw.length };
+  }
+  if (r.pinyin) {
+    const ppos = r.pinyin.indexOf(kw);
+    if (ppos >= 0) {
+      return { score: 90 + Math.max(0, 50 - ppos), match_kind: 'pinyin', match_pos: null, match_len: null };
+    }
+  }
+  let ti = 0; let first = -1; let last = -1;
+  for (const ch of kw) {
+    const found = text.indexOf(ch, ti);
+    if (found < 0) return null;
+    if (first < 0) first = found;
+    last = found;
+    ti = found + 1;
+  }
+  const span = last - first + 1;
+  return { score: Math.max(1, 80 - (span - kw.length) * 2), match_kind: 'fuzzy', match_pos: null, match_len: null };
+}
+
 // 打开磁盘数据库；文件损坏时备份为 .bak 并重建
 function openStore(dbPath, imagesDir = null) {
   // 先用独立句柄探测文件可用性；损坏时先关闭句柄再备份重建，
@@ -262,4 +317,4 @@ function openStore(dbPath, imagesDir = null) {
   return new ClipStore(dbPath, imagesDir);
 }
 
-module.exports = { ClipStore, openStore, toPinyin, hasCJK };
+module.exports = { ClipStore, openStore, toPinyin, hasCJK, scoreRow };

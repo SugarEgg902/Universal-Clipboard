@@ -119,11 +119,11 @@ test('search 纯空白关键词返回空数组', () => {
   assert.deepStrictEqual(s.search('   '), []);
 });
 
-test('search 最多返回 200 条且为最新', () => {
+test('search 最多返回 50 条且为最新', () => {
   const s = new ClipStore();
   for (let i = 0; i < 210; i++) s.insert('bulk ' + i, at(2026, 10, 8) + i);
   const rows = s.search('bulk');
-  assert.strictEqual(rows.length, 200);
+  assert.strictEqual(rows.length, 50);
   assert.ok(rows.some((r) => r.text === 'bulk 209'));
 });
 
