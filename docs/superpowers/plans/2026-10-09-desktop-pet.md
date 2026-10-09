@@ -29,6 +29,8 @@
 
 ## Task 1: 配置扩展（privacyConfig 整体化 + pet 子配置）
 
+> **执行期修订（质量审查修复）**：sanitizePet 的 `>= 0` 坐标钳制会拒绝多显示器下左/上方副屏的合法负数坐标（桌宠在该屏永远无法记忆位置），改为仅校验 `Number.isFinite`（负数合法，越界钳制交给窗口层）。setPet 改为非法值保留原值（base 回退）、`null` 显式重置、`undefined` 键跳过；测试相应替换"负数视为非法"断言并新增多 init 重置用例。计数 81→82。
+
 **Files:**
 - Modify: `src/main/privacyConfig.js`
 - Test: `tests/privacyConfig.test.js`（追加）
@@ -175,7 +177,7 @@ Run: 单文件全绿。
 
 - [ ] **Step 3: 全量回归 + Commit**
 
-Run: `npm test` — Expected: **81/81 pass**（76 + 5 新）。
+Run: `npm test` — Expected: **82/82 pass**（76 + 5 新 + 1 审查修正替换净增……以实际为准：替换 1 条新增 1 条 = 82）。
 
 ```bash
 git add src/main/privacyConfig.js tests/privacyConfig.test.js
