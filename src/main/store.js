@@ -108,17 +108,22 @@ class ClipStore {
       this.db.exec('ALTER TABLE clips ADD COLUMN pinyin TEXT');
       this.backfillPinyin();
     }
+    this.backfillPinyin(); // 幂等补扫：修复上次回填中断遗留的 NULL 行
   }
 
   // Me-Search 存量回填：pinyin 为 NULL 的文本行中含中文者补拼音（迁移一次性调用；测试可直接调用）
+  // 事务化：原子提交，避免逐行 fsync
   backfillPinyin() {
     const rows = this.db.prepare(
       "SELECT id, text FROM clips WHERE type = 'text' AND pinyin IS NULL"
     ).all();
+    if (!rows.length) return;
     const upd = this.db.prepare('UPDATE clips SET pinyin = ? WHERE id = ?');
-    for (const r of rows) {
-      if (hasCJK(r.text)) upd.run(toPinyin(r.text), r.id);
-    }
+    this.db.transaction(() => {
+      for (const r of rows) {
+        if (hasCJK(r.text)) upd.run(toPinyin(r.text), r.id);
+      }
+    })();
   }
 
   // 返回 lastInsertRowid；空白文本或当天重复时返回 null
