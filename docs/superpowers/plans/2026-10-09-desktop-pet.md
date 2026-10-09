@@ -188,6 +188,8 @@ git commit -m "feat: 配置整体化——pet 子配置（位置/开关/形象�
 
 ## Task 2: pet 主进程窗口 + IPC + watcher 接线 + 托盘
 
+> **执行期修订（质量审查修复，commit 338377e）**：① `loadFile` 加 `.catch`（pet.html 在 Task 3 才创建，且 pet 默认开启，否则启动即未处理 rejection）；② 多屏修正——applyDrag 钳制改为 `screen.getDisplayNearestPoint` 最近显示器（原实现只钳主屏，与 4dce8cd 配置层负数坐标支持矛盾，副屏桌宠一拖即弹回）；create() 恢复位置时校验是否仍落在某块已连接显示器的可见区内，越界回退默认角落（防拔屏后桌宠出现在屏外无恢复路径）；③ pet:set-emoji handler 加 PET_EMOJIS 白名单守卫再转发渲染层；④ Menu 并入 ipc.js 顶部 require；⑤ 24/40 魔数加注释；⑥ onClip 的 looksLikeSecret 提为局部常量。计数不变（86/86）。
+
 **Files:**
 - Create: `src/main/pet.js`
 - Modify: `src/main/index.js`
