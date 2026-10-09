@@ -50,3 +50,63 @@ test('init 前 setMode 仅更新内存不写盘', () => {
   privacyConfig.setMode('mask'); // 还原，避免污染后续
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('getPet：无 pet 字段时返回懒默认值', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ privacyMode: 'mask' }));
+  privacyConfig.init(dir);
+  const pet = privacyConfig.getPet();
+  assert.strictEqual(pet.enabled, true);
+  assert.strictEqual(pet.x, null);
+  assert.strictEqual(pet.y, null);
+  assert.strictEqual(pet.emoji, '📦');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('getPet：pet 字段部分缺失时深合并默认', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ privacyMode: 'skip', pet: { emoji: '🐱' } }));
+  privacyConfig.init(dir);
+  const pet = privacyConfig.getPet();
+  assert.strictEqual(pet.emoji, '🐱');
+  assert.strictEqual(pet.enabled, true); // 默认回填
+  assert.strictEqual(privacyConfig.getMode(), 'skip'); // 原字段不受影响
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setPet：深合并写盘且原子文件包含 privacyMode', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  privacyConfig.setMode('skip');
+  privacyConfig.setPet({ x: 100, y: 200 });
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(saved.privacyMode, 'skip');
+  assert.strictEqual(saved.pet.x, 100);
+  assert.strictEqual(saved.pet.y, 200);
+  assert.strictEqual(saved.pet.enabled, true);
+  assert.strictEqual(privacyConfig.getPet().y, 200);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setPet：非法字段被钳制（emoji 白名单 / x,y 数字或 null / enabled 布尔）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  privacyConfig.setPet({ emoji: '💣', enabled: 'yes', x: 'abc', y: -5 });
+  const pet = privacyConfig.getPet();
+  assert.strictEqual(pet.emoji, '📦'); // 不在白名单 → 保持默认
+  assert.strictEqual(pet.enabled, true);
+  assert.strictEqual(pet.x, null);
+  assert.strictEqual(pet.y, null); // 负数视为非法
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setMode 与 setPet 独立不互相覆盖', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  privacyConfig.setPet({ emoji: '🐤', x: 10 });
+  privacyConfig.setMode('skip');
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(saved.pet.emoji, '🐤');
+  assert.strictEqual(saved.privacyMode, 'skip');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
