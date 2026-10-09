@@ -755,8 +755,9 @@ test('darwin 分支调用 osascript 模拟 Cmd+V', async () => {
   const res = await paste('darwin', fakeExec);
   assert.deepStrictEqual(res, { ok: true });
   assert.strictEqual(calls[0].cmd, 'osascript');
-  assert.ok(calls[0].args[0].includes('keystroke "v"'));
-  assert.ok(calls[0].args[0].includes('command down'));
+  assert.strictEqual(calls[0].args[0], '-e');
+  assert.ok(calls[0].args[1].includes('keystroke "v"'));
+  assert.ok(calls[0].args[1].includes('command down'));
 });
 
 test('osascript 失败返回 paste-failed', async () => {
