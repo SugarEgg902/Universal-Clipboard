@@ -1,10 +1,21 @@
 const path = require('node:path');
+const crypto = require('node:crypto');
+const { pathToFileURL } = require('node:url');
 const {
   app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, screen,
+  protocol, net,
 } = require('electron');
 const { openStore } = require('./store');
 const { ClipboardWatcher } = require('./watcher');
 const { registerIpc } = require('./ipc');
+
+// 缩略图自定义协议：clipimg://<id>，仅允许返回 images 目录内的图片文件
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'clipimg',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
 
 let win = null;
 let tray = null;
@@ -77,17 +88,55 @@ function createTray() {
 
 app.whenReady().then(() => {
   const dbPath = path.join(app.getPath('userData'), 'clipboard.db');
-  store = openStore(dbPath);
+  const imagesDir = path.join(app.getPath('userData'), 'images');
+  store = openStore(dbPath, imagesDir);
 
-  registerIpc({ store, getWindow: () => win });
+  protocol.handle('clipimg', async (request) => {
+    try {
+      const id = Number(new URL(request.url).hostname);
+      const row = store.get(id);
+      if (!row || row.type !== 'image' || !row.image_path) {
+        return new Response(null, { status: 404 });
+      }
+      const fileName = path.basename(row.image_path);
+      return net.fetch(pathToFileURL(path.join(imagesDir, fileName)).toString());
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+  });
+
+  registerIpc({ store, getWindow: () => win, imagesDir });
+
+  const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
   watcher = new ClipboardWatcher({
+    hasImage: () => clipboard.availableFormats().some((f) => f.startsWith('image/')),
+    readImage: () => {
+      const img = clipboard.readImage();
+      if (img.isEmpty()) return null;
+      const buffer = img.toPNG();
+      if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) return null;
+      const size = img.getSize();
+      return {
+        buffer,
+        width: size.width,
+        height: size.height,
+        key: crypto.createHash('sha256').update(buffer).digest('hex'),
+      };
+    },
     readText: () => clipboard.readText(),
     onClip: (text) => {
       try {
         store.insert(text);
       } catch (err) {
         console.error('剪贴板写入数据库失败:', err);
+      }
+    },
+    onImage: (img) => {
+      try {
+        store.insertImage(img.buffer, img.width, img.height);
+      } catch (err) {
+        console.error('图片写入数据库失败:', err);
       }
     },
     intervalMs: 500,
