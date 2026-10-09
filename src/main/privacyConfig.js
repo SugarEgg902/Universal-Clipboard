@@ -27,7 +27,9 @@ function setMode(next) {
   mode = next;
   if (!configPath) return;
   try {
-    fs.writeFileSync(configPath, JSON.stringify({ privacyMode: mode }, null, 2));
+    const tmp = configPath + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ privacyMode: mode }, null, 2));
+    fs.renameSync(tmp, configPath);
   } catch (err) {
     console.error('隐私配置保存失败:', err);
   }
