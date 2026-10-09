@@ -13,7 +13,6 @@ body { font-family: -apple-system, system-ui, sans-serif; }
   cursor: grab; pointer-events: auto;
   animation: bob 3.2s ease-in-out infinite;
 }
-#mascot.dragging { cursor: grabbing; animation: none; }
 
 /* 待机小动作（JS 切 class，播完移除） */
 #mascot.blink   { animation: blink .5s ease; }
@@ -25,6 +24,9 @@ body { font-family: -apple-system, system-ui, sans-serif; }
 #mascot.excited { animation: hop .45s ease 2; }
 #mascot.hover   { animation: lean 1.2s ease-in-out infinite; }
 #mascot.sleepy  { animation: bob 6s ease-in-out infinite; filter: saturate(.6); }
+
+/* 拖拽：排在所有状态类之后，等优先级下靠源码顺序压过 hover 等动画 */
+#mascot.dragging { cursor: grabbing; animation: none; }
 
 @keyframes bob     { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
 @keyframes blink   { 50% { transform: scaleY(.15) } }
@@ -54,7 +56,7 @@ body { font-family: -apple-system, system-ui, sans-serif; }
   font-size: 12px; line-height: 1.4; word-break: break-all;
   animation: bubble-rise 3s ease forwards;
 }
-.bubble.secret { color: #888; }
+.bubble.secret { color: var(--pet-bubble-secret, #888); }
 @keyframes bubble-rise {
   0% { opacity: 0; transform: translateY(8px) scale(.9) }
   10% { opacity: 1; transform: translateY(0) scale(1) }
@@ -63,5 +65,5 @@ body { font-family: -apple-system, system-ui, sans-serif; }
 }
 
 @media (prefers-color-scheme: dark) {
-  :root { --pet-bubble-bg: rgba(40,40,46,.95); --pet-bubble-text: #eee; }
+  :root { --pet-bubble-bg: rgba(40,40,46,.95); --pet-bubble-text: #eee; --pet-bubble-secret: #aaa; }
 }
