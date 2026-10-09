@@ -54,6 +54,11 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
       },
     });
     petWin.setAlwaysOnTop(true, 'floating');
+    // 页面加载完成后回填已持久化的形象（pet.html 硬编码默认 📦；
+    // 重建窗口也走 create()，此路径同时覆盖）
+    petWin.webContents.on('did-finish-load', () => {
+      petWin.webContents.send('pet:emoji', cfg.emoji);
+    });
     petWin.loadFile(path.join(rendererDir, 'pet.html')).catch((err) => console.error('桌宠页面加载失败:', err));
     petWin.on('closed', () => {
       petWin = null;

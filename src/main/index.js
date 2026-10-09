@@ -25,6 +25,7 @@ protocol.registerSchemesAsPrivileged([
 
 let win = null;
 let tray = null;
+let trayPetItem = null;
 let store = null;
 let watcher = null;
 let palette = null;
@@ -76,7 +77,7 @@ function createTray() {
   if (process.platform === 'darwin') icon.setTemplateImage(true);
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip('剪贴板抽屉柜');
-  tray.setContextMenu(Menu.buildFromTemplate([
+  const menu = Menu.buildFromTemplate([
     { label: '打开剪贴板抽屉柜', click: showWindow },
     {
       label: '开机自启',
@@ -87,6 +88,7 @@ function createTray() {
       },
     },
     {
+      id: 'pet-toggle',
       label: '桌宠',
       type: 'checkbox',
       checked: privacyConfig.getPet().enabled,
@@ -127,7 +129,10 @@ function createTray() {
     },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
-  ]));
+  ]);
+  // 菜单常驻（非每次 popup 重建），存引用供桌宠右键"禁用桌宠"同步勾选态
+  trayPetItem = menu.getMenuItemById('pet-toggle');
+  tray.setContextMenu(menu);
   if (process.platform !== 'darwin') {
     tray.on('click', showWindow);
   }
@@ -173,6 +178,7 @@ app.whenReady().then(() => {
     showWindow,
     showPalette: () => palette.show(),
     privacyConfig,
+    setTrayPetChecked: (checked) => { if (trayPetItem) trayPetItem.checked = checked; },
   });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;

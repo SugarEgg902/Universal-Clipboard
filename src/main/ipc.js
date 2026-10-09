@@ -19,8 +19,8 @@ function withSecret(row) {
 
 const withMeta = (row) => withSecret(withThumb(row));
 
-// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig }
-function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig }) {
+// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked }
+function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
   // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
   // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
@@ -131,9 +131,6 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
   ipcMain.handle('pet:open-main', () => {
     if (showWindow) showWindow();
   });
-  ipcMain.handle('pet:open-palette', () => {
-    if (showPalette) showPalette();
-  });
   ipcMain.handle('pet:context-menu', () => {
     Menu.buildFromTemplate([
       { label: '打开主窗口', click: () => showWindow && showWindow() },
@@ -144,14 +141,10 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
         click: () => {
           privacyConfig.setPet({ enabled: false });
           if (pet) pet.hide();
+          if (setTrayPetChecked) setTrayPetChecked(false); // 同步托盘 checkbox 勾选态
         },
       },
     ]).popup();
-  });
-  ipcMain.handle('pet:set-emoji', (_event, emoji) => {
-    if (!privacyConfig.PET_EMOJIS.includes(emoji)) return;
-    privacyConfig.setPet({ emoji });
-    if (pet) pet.setEmoji(emoji);
   });
 }
 
