@@ -104,9 +104,11 @@ test('search：模糊兜底不触发——快路径 ≥20 条', () => {
   const store = new ClipStore();
   for (let i = 0; i < 25; i++) store.insert(`hello item number ${i}`);
   store.insert('please copy this clipboard content');
+  store.insert('hx ex lx lo spread'); // 诱饵：hello 的子序列，兜底误触发时会以 fuzzy 出现
   const res = store.search('hello');
   assert.strictEqual(res.filter((r) => r.match_kind === 'fuzzy').length, 0);
   assert.ok(res.length >= 20);
+  assert.ok(res.every((r) => r.text !== 'hx ex lx lo spread'));
 });
 
 test('search：模糊兜底不触发——查询 <3 字符', () => {

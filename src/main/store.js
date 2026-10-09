@@ -44,10 +44,10 @@ class ClipStore {
       'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
     );
     this.searchTextStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' LIMIT 500"
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 500"
     );
     this.searchPinyinStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND pinyin LIKE ? ESCAPE '\\' LIMIT 500"
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND pinyin LIKE ? ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 500"
     );
     this.fuzzyScanStmt = this.db.prepare(
       "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' ORDER BY created_at DESC, id DESC LIMIT 5000"
@@ -189,7 +189,7 @@ class ClipStore {
       for (const r of this.fuzzyScanStmt.all()) {
         if (byId.has(r.id)) continue;
         const s = scoreRow(r, lower);
-        if (s && s.match_kind === 'fuzzy') scored.push({ ...r, ...s });
+        if (s) scored.push({ ...r, ...s }); // 任意命中均收：补 SQL LIKE 仅 ASCII 折叠的缺口（如 'CAFÉ' vs 'café'）
       }
     }
 
@@ -275,6 +275,7 @@ function scoreRow(r, kw) {
   const text = r.text.toLowerCase();
   const pos = text.indexOf(kw);
   if (pos >= 0) {
+    // match_pos/match_len 是小写化后文本的索引；toLowerCase 改变长度时（罕见，如 'İ'）会与原文漂移，消费方需自行处理
     return { score: 100 + Math.max(0, 50 - pos), match_kind: 'substring', match_pos: pos, match_len: kw.length };
   }
   if (r.pinyin) {
