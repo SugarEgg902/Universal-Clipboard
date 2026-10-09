@@ -953,6 +953,8 @@ git commit -m "feat: 快速粘贴面板与粘贴适配层（Cmd+Shift+; / AppleS
 
 > 本任务无新增自动化测试（渲染层惯例）；门 = `node --check` + 全量测试不回归 + Task 8 冒烟。
 
+> **执行期修订（c25d705）**：2d 让 SNIPPETS_KEY 成为可选中值，但搜索清空路径仍调 `selectDay(state.selected)`，会渲染 `__snippets__` 空日期视图。修复：search input 监听器的 else 分支与 `clearSearch()` 均改为 `state.selected === SNIPPETS_KEY` 时路由到 `selectSnippets()`，否则照旧 `selectDay()`。另 2d 实现时需在组循环中同步 `state.items.push(item)`（保键盘导航索引与 DOM 顺序一致）。
+
 - [ ] **Step 1: styles.css 追加**
 
 ```css
