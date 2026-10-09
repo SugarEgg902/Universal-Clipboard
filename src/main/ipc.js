@@ -5,7 +5,7 @@ const { getLast7Days, formatLabel } = require('./dates');
 // 图片条目附带缩略图协议地址；文本条目 thumb 为 null
 function withThumb(row) {
   return row.type === 'image'
-    ? { ...row, text: '', thumb: `clipimg://${row.id}` }
+    ? { ...row, text: '', thumb: `clipimg://thumb/${row.id}` }
     : { ...row, thumb: null };
 }
 

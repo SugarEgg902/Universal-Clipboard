@@ -93,7 +93,8 @@ app.whenReady().then(() => {
 
   protocol.handle('clipimg', async (request) => {
     try {
-      const id = Number(new URL(request.url).hostname);
+      const url = new URL(request.url);
+      const id = Number(url.pathname.split('/').filter(Boolean)[0]);
       const row = store.get(id);
       if (!row || row.type !== 'image' || !row.image_path) {
         return new Response(null, { status: 404 });
