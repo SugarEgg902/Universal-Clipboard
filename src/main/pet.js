@@ -21,8 +21,20 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
   function create() {
     const cfg = getPetConfig();
     const display = screen.getPrimaryDisplay();
-    const x = cfg.x != null ? cfg.x : display.bounds.width - WIN_W - 24;
-    const y = cfg.y != null ? cfg.y : display.bounds.height - WIN_H - 24;
+    // 24：默认角落距屏幕右/下缘的留边像素
+    const defX = display.bounds.width - WIN_W - 24;
+    const defY = display.bounds.height - WIN_H - 24;
+    let x = defX;
+    let y = defY;
+    if (cfg.x != null && cfg.y != null) {
+      x = cfg.x;
+      y = cfg.y;
+      // 校验保存的位置仍落在某块已连接显示器的可见区内，否则回退默认角落
+      // （拔掉副屏后避免桌宠出现在屏外且无恢复路径）
+      const b = screen.getDisplayNearestPoint({ x, y }).bounds;
+      const visible = x >= b.x - WIN_W + 40 && x <= b.x + b.width - 40 && y >= b.y && y <= b.y + b.height - 40;
+      if (!visible) { x = defX; y = defY; }
+    }
     petWin = new BrowserWindow({
       width: WIN_W,
       height: WIN_H,
@@ -42,7 +54,7 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
       },
     });
     petWin.setAlwaysOnTop(true, 'floating');
-    petWin.loadFile(path.join(rendererDir, 'pet.html'));
+    petWin.loadFile(path.join(rendererDir, 'pet.html')).catch((err) => console.error('桌宠页面加载失败:', err));
     petWin.on('closed', () => {
       petWin = null;
     });
@@ -57,11 +69,14 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
     if (petWin) petWin.hide();
   }
 
-  // 渲染层拖拽增量（dx,dy 可为负）；钳制在 primary display 内
+  // 渲染层拖拽增量（dx,dy 可为负）；按当前位置最近的显示器钳制
   function applyDrag(dx, dy) {
     if (!petWin) return;
     const [cx, cy] = petWin.getPosition();
-    const d = screen.getPrimaryDisplay().bounds;
+    const d = screen.getDisplayNearestPoint({ x: cx, y: cy }).bounds;
+    // 40：钳制边距，保证至少 40px 留在屏内可被抓回。
+    // x 轴下界为 d.x - WIN_W + 40（允许宠物大部分悬在左缘外），与 y 轴不允许越顶不对称——有意设计：
+    // 贴左缘收纳是常见用法，而顶缘之上无法点击且无收纳价值。
     const nx = Math.min(Math.max(cx + dx, d.x - WIN_W + 40), d.x + d.width - 40);
     const ny = Math.min(Math.max(cy + dy, d.y), d.y + d.height - 40);
     petWin.setPosition(nx, ny);

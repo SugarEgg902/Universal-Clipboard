@@ -198,13 +198,14 @@ app.whenReady().then(() => {
         // 检测器本身不 trim（含空白即不判定是对多行内容的严格排除）；
         // 调用点 trim 以兜住"终端复制带尾换行的密码"这一常见形态。
         const trimmed = String(text).trim();
-        if (privacyConfig.getMode() === 'skip' && looksLikeSecret(trimmed)) {
+        const secret = looksLikeSecret(trimmed);
+        if (privacyConfig.getMode() === 'skip' && secret) {
           console.log('[隐私] 已跳过疑似密码内容（完全不记录模式）');
           return;
         }
         const id = store.insert(text);
         if (id != null && pet) {
-          pet.notifyClip(buildClipPayload({ kind: 'text', text: trimmed, secret: looksLikeSecret(trimmed) }));
+          pet.notifyClip(buildClipPayload({ kind: 'text', text: trimmed, secret }));
         }
       } catch (err) {
         console.error('剪贴板写入数据库失败:', err);

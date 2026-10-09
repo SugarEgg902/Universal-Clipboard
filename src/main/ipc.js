@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { ipcMain, clipboard, nativeImage } = require('electron');
+const { ipcMain, clipboard, nativeImage, Menu } = require('electron');
 const { getLast7Days, formatLabel } = require('./dates');
 const { looksLikeSecret } = require('./secretDetector');
 
@@ -135,7 +135,6 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
     if (showPalette) showPalette();
   });
   ipcMain.handle('pet:context-menu', () => {
-    const { Menu } = require('electron');
     Menu.buildFromTemplate([
       { label: '打开主窗口', click: () => showWindow && showWindow() },
       { label: '快速粘贴面板', click: () => showPalette && showPalette() },
@@ -150,6 +149,7 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
     ]).popup();
   });
   ipcMain.handle('pet:set-emoji', (_event, emoji) => {
+    if (!privacyConfig.PET_EMOJIS.includes(emoji)) return;
     privacyConfig.setPet({ emoji });
     if (pet) pet.setEmoji(emoji);
   });
