@@ -736,6 +736,8 @@ git commit -m "feat: 桌宠渲染层——待机状态机、冒泡、拖拽换�
 
 ## 自检记录
 
+- **执行期修订（终审修复，commit a3827ad）**：① create() 在 setAlwaysOnTop 后注册 `did-finish-load` 发送 `pet:emoji` 回填持久化形象（原实现窗口重建永远渲染硬编码 📦，emoji 配置成写死路径）；② 托盘桌宠 checkbox 与右键菜单"禁用桌宠"状态同步——托盘菜单常驻（setContextMenu 一次性构建），桌宠项给 `id: 'pet-toggle'` 并缓存 MenuItem，经 registerIpc 传 `setTrayPetChecked` 回调（惰性读取，先于 createTray 注册无顺序问题），ipc.js 禁用路径回调置 false；③ 删除从未被调用的 petOpenPalette/petSetEmoji 桥接方法与 pet:open-palette/pet:set-emoji handler（grep 确认零调用）。计数不变（86/86）。
+
 - Spec 覆盖：形态/置顶(§3.1→T2)、事件接线与 skip 语义(§3.2→T2)、配置(§3.3→T1)、IPC(§3.4→T2)、冒泡(§4.1→T3)、状态机(§4.2→T3)、交互(§4.3→T3)、边界(§5→T2 钳制/T3 冒烟)、测试(§6→T1/T2/T3)。
 - 无占位符：所有代码步骤含完整实现。
 - 类型一致：payload `{kind, preview, secret}` 在 pet.js 生成、IPC 透传、pet.js 渲染层消费一致；配置 pet 字段名在 privacyConfig/pet.js/index.js/tray 一致。
