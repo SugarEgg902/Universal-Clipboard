@@ -361,7 +361,7 @@ Expected: FAIL（`s.pin is not a function`）
 - [ ] **Step 4: 运行确认通过**
 
 Run: `npm test`
-Expected: 33 + 8 = 41/41 pass（既有 33 个不受影响）。
+Expected: 44 + 7 = 51/51 pass（既有 44 个不受影响）。
 
 - [ ] **Step 5: Commit**
 
@@ -499,7 +499,9 @@ const privacyConfig = require('./privacyConfig');
 ```js
     onClip: (text) => {
       try {
-        if (privacyConfig.getMode() === 'skip' && looksLikeSecret(text)) {
+        // 检测器本身不 trim（含空白即不判定是对多行内容的严格排除）；
+        // 调用点 trim 以兜住"终端复制带尾换行的密码"这一常见形态。
+        if (privacyConfig.getMode() === 'skip' && looksLikeSecret(String(text).trim())) {
           console.log('[隐私] 已跳过疑似密码内容（完全不记录模式）');
           return;
         }
@@ -509,6 +511,8 @@ const privacyConfig = require('./privacyConfig');
       }
     },
 ```
+
+> **执行期修正案（Task 1）**：计划原实现 `String(text).trim()` 与计划测试 `'…\n' → false` 矛盾（trim 先行会让尾换行逃过 `\s` 检查）。以测试为准：检测器不 trim（012cb93）；trim 责任移到调用点（本任务）。store 入库本就对 text trim，故读取侧打码与 skip 拦截判定一致。
 
 5d. `createTray()` 的菜单模板，在"开机自启"项之后、`{ type: 'separator' }` 之前插入隐私模式子菜单：
 
@@ -535,7 +539,7 @@ const privacyConfig = require('./privacyConfig');
 - [ ] **Step 6: 语法检查 + 回归**
 
 Run: `node --check src/main/index.js && npm test`
-Expected: 语法 OK；41/41 pass。
+Expected: 语法 OK；54/54 pass。
 
 - [ ] **Step 7: Commit**
 
@@ -705,7 +709,7 @@ contextBridge.exposeInMainWorld('api', {
 - [ ] **Step 4: 语法检查 + 回归**
 
 Run: `node --check src/main/ipc.js && node --check src/preload.js && node --check src/main/index.js && npm test`
-Expected: 41/41 pass。
+Expected: 54/54 pass。
 
 - [ ] **Step 5: Commit**
 
@@ -910,7 +914,7 @@ const paster = require('./paster');
 - [ ] **Step 7: 语法检查 + 回归**
 
 Run: `node --check src/main/palette.js && node --check src/main/paster.js && node --check src/main/index.js && npm test`
-Expected: 41 + 3 = 44/44 pass。
+Expected: 54 + 3 = 57/57 pass。
 
 - [ ] **Step 8: Commit**
 
@@ -1234,7 +1238,7 @@ document.getElementById('pin-confirm').addEventListener('click', async () => {
 - [ ] **Step 3: 语法检查 + 回归**
 
 Run: `node --check src/renderer/app.js && npm test`
-Expected: 44/44 pass。
+Expected: 57/57 pass。
 
 - [ ] **Step 4: Commit**
 
@@ -1443,7 +1447,7 @@ function initPalette() {
 - [ ] **Step 3: 语法检查 + 回归**
 
 Run: `node --check src/renderer/app.js && npm test`
-Expected: 44/44 pass。
+Expected: 57/57 pass。
 
 - [ ] **Step 4: Commit**
 
@@ -1461,7 +1465,7 @@ git commit -m "feat: 快速粘贴面板渲染模式（过滤/键盘导航/粘贴
 
 - [ ] **Step 1: 冒烟**
 
-1. `node --check` 全部改动文件 + `npm test`（44/44）。
+1. `node --check` 全部改动文件 + `npm test`（57/57）。
 2. 清理旧 DB 测试干扰：不需要——用既有库即可。后台 `npm start`，等 6 秒。
 3. 复制疑似密码：`osascript -e 'set the clipboard to "Xy9#kQ2$vL8mP4!zR2"'`（18 字符），等 2 秒。
 4. `ELECTRON_RUN_AS_NODE=1` electron 临时脚本查 `~/Library/Application Support/clipboard-drawer/clipboard.db` 最新行：存在且 type='text'（默认 mask 模式应记录）。
@@ -1486,7 +1490,7 @@ git commit -m "feat: 快速粘贴面板渲染模式（过滤/键盘导航/粘贴
 
 - [ ] **Step 3: 回归 + Commit**
 
-Run: `npm test`（44/44）
+Run: `npm test`（57/57）
 
 ```bash
 git add README.md
