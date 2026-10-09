@@ -1,6 +1,6 @@
 window.addEventListener('unhandledrejection', (e) => console.error('IPC 调用失败:', e.reason));
 
-const state = { days: [], selected: null, keyword: '' };
+const state = { days: [], selected: null, keyword: '', items: [], selectedIndex: -1 };
 
 const drawersEl = document.getElementById('drawers');
 const itemsEl = document.getElementById('items');
@@ -57,18 +57,25 @@ async function selectDay(dateKey) {
   state.keyword = '';
   searchEl.value = '';
   renderDrawers();
+  state.selectedIndex = -1;
   const items = await window.api.listByDay(dateKey);
   titleEl.textContent = `${labelFor(dateKey)} · ${items.length} 条`;
   renderItems(items);
 }
 
 function renderItems(items) {
+  state.items = items;
+  if (state.selectedIndex >= items.length) state.selectedIndex = items.length - 1;
   itemsEl.innerHTML = '';
   if (!items.length) {
     itemsEl.innerHTML = '<div class="empty">暂无剪贴记录</div>';
     return;
   }
-  for (const item of items) itemsEl.appendChild(itemRow(item));
+  for (let i = 0; i < items.length; i++) {
+    const row = itemRow(items[i]);
+    if (i === state.selectedIndex) row.classList.add('selected');
+    itemsEl.appendChild(row);
+  }
 }
 
 function itemRow(item) {
@@ -79,11 +86,22 @@ function itemRow(item) {
   time.className = 'item-time';
   time.textContent = formatTime(item.created_at);
 
-  const preview = document.createElement('span');
-  preview.className = 'item-text';
-  preview.textContent = truncate(item.text);
-  preview.title = item.text;
-  preview.addEventListener('click', () => window.api.copyClip(item.id));
+  if (item.type === 'image') {
+    const thumb = document.createElement('img');
+    thumb.className = 'item-thumb';
+    thumb.src = item.thumb;
+    thumb.alt = '';
+    thumb.addEventListener('error', () => thumb.replaceWith(imageLabel(item)));
+    thumb.addEventListener('click', () => window.api.copyClip(item.id));
+    row.append(time, thumb);
+  } else {
+    const preview = document.createElement('span');
+    preview.className = 'item-text';
+    preview.textContent = truncate(item.text);
+    preview.title = item.text;
+    preview.addEventListener('click', () => window.api.copyClip(item.id));
+    row.append(time, preview);
+  }
 
   const del = document.createElement('button');
   del.className = 'item-delete';
@@ -95,8 +113,17 @@ function itemRow(item) {
     refreshAfterMutation();
   });
 
-  row.append(time, preview, del);
+  row.append(del);
   return row;
+}
+
+// 缩略图加载失败（文件缺失）时的占位
+function imageLabel(item) {
+  const label = document.createElement('span');
+  label.className = 'item-text';
+  label.textContent = `🖼 图片 · ${item.width}×${item.height}`;
+  label.addEventListener('click', () => window.api.copyClip(item.id));
+  return label;
 }
 
 async function refreshAfterMutation() {
@@ -109,11 +136,13 @@ async function refreshAfterMutation() {
 }
 
 async function doSearch() {
+  state.selectedIndex = -1;
   renderDrawers();
   const rows = await window.api.search(state.keyword);
   titleEl.textContent = `搜索“${state.keyword}” · ${rows.length} 条`;
   itemsEl.innerHTML = '';
   if (!rows.length) {
+    state.items = [];
     itemsEl.innerHTML = '<div class="empty">没有匹配的记录</div>';
     return;
   }
@@ -123,6 +152,9 @@ async function doSearch() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
+  // 扁平数组，顺序与下方分组渲染的文档顺序一致（供 Enter 复制按索引取数据）
+  state.items = [];
+  for (const group of groups.values()) state.items.push(...group);
   for (const [key, group] of groups) {
     const h = document.createElement('div');
     h.className = 'search-group';
@@ -145,8 +177,66 @@ clearBtn.addEventListener('click', async () => {
   selectDay(state.selected);
 });
 
+function moveSelection(delta) {
+  const n = state.items.length;
+  if (!n) return;
+  state.selectedIndex = Math.min(Math.max(state.selectedIndex + delta, 0), n - 1);
+  updateSelectionHighlight();
+}
+
+function updateSelectionHighlight() {
+  const rows = itemsEl.querySelectorAll('.item');
+  rows.forEach((el, i) => el.classList.toggle('selected', i === state.selectedIndex));
+  const el = rows[state.selectedIndex];
+  if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+function clearSearch() {
+  searchEl.value = '';
+  state.keyword = '';
+  if (state.selected) selectDay(state.selected);
+}
+
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') window.api.hideWindow();
+  const mod = e.metaKey || e.ctrlKey;
+
+  if (mod && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    searchEl.focus();
+    searchEl.select();
+    return;
+  }
+
+  if (e.key === 'Escape') {
+    if (document.activeElement === searchEl && searchEl.value) {
+      e.preventDefault();
+      clearSearch();
+      return;
+    }
+    if (state.keyword) {
+      clearSearch();
+      return;
+    }
+    window.api.hideWindow();
+    return;
+  }
+
+  if (document.activeElement === searchEl) {
+    // 输入框内：可打字、Enter 不复制、↑↓ 交给列表导航
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  }
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    moveSelection(e.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+
+  if (e.key === 'Enter' && state.selectedIndex >= 0) {
+    e.preventDefault();
+    const item = state.items[state.selectedIndex];
+    if (item) window.api.copyClip(item.id);
+  }
 });
 
 // 窗口每次显示时重置到"今天"并聚焦搜索框
