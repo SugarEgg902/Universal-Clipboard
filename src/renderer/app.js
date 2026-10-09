@@ -330,6 +330,7 @@ async function doSearch() {
 searchEl.addEventListener('input', () => {
   state.keyword = searchEl.value.trim();
   if (state.keyword) doSearch();
+  else if (state.selected === SNIPPETS_KEY) selectSnippets();
   else if (state.selected) selectDay(state.selected);
 });
 
@@ -358,7 +359,8 @@ function updateSelectionHighlight() {
 function clearSearch() {
   searchEl.value = '';
   state.keyword = '';
-  if (state.selected) selectDay(state.selected);
+  if (state.selected === SNIPPETS_KEY) selectSnippets();
+  else if (state.selected) selectDay(state.selected);
 }
 
 window.addEventListener('keydown', (e) => {
