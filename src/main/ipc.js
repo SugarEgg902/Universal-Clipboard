@@ -19,8 +19,8 @@ function withSecret(row) {
 
 const withMeta = (row) => withSecret(withThumb(row));
 
-// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster }
-function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster }) {
+// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp }
+function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
   // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
   // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
@@ -103,6 +103,9 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster }) 
     if (palette) palette.hide();
     if (!paster) return { ok: false, error: 'unsupported-platform' };
     try {
+      // 辞去激活并把前台还给之前的应用；稍等再注入按键（激活切换是异步投递的）
+      if (hideApp) hideApp();
+      await new Promise((r) => setTimeout(r, 80));
       return await paster.paste();
     } catch (err) {
       console.error('模拟粘贴失败:', err);

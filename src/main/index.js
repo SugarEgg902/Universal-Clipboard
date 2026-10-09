@@ -138,6 +138,7 @@ app.whenReady().then(() => {
     imagesDir,
     getPaletteWindow: () => palette && palette.getWindow(),
     paster,
+    hideApp: () => app.hide(),
   });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;

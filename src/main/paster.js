@@ -13,8 +13,11 @@ function paste(platform = process.platform, execFileFn = execFile) {
       resolve({ ok: false, error: 'unsupported-platform' });
       return;
     }
-    execFileFn('osascript', ['-e', MACOS_PASTE_SCRIPT], (err) => {
+    // 2s 超时：System Events 卡死时不能让 IPC promise 永远挂起（超时即 err → paste-failed）
+    execFileFn('osascript', ['-e', MACOS_PASTE_SCRIPT], { timeout: 2000 }, (err) => {
       if (err) {
+        // 最常见原因是未授予辅助功能权限；保留详情便于排查
+        console.error('osascript 失败:', err.message);
         resolve({ ok: false, error: 'paste-failed' });
         return;
       }
