@@ -177,7 +177,7 @@ Run: 单文件全绿。
 
 - [ ] **Step 3: 全量回归 + Commit**
 
-Run: `npm test` — Expected: **82/82 pass**（76 + 5 新 + 1 审查修正替换净增……以实际为准：替换 1 条新增 1 条 = 82）。
+Run: `npm test` — Expected: **82/82 pass**（76 + 5 新 + 审查修正：替换 1 条钳制用例、新增 1 条多 init 用例）。
 
 ```bash
 git add src/main/privacyConfig.js tests/privacyConfig.test.js
@@ -735,4 +735,4 @@ git commit -m "feat: 桌宠渲染层——待机状态机、冒泡、拖拽换�
 - Spec 覆盖：形态/置顶(§3.1→T2)、事件接线与 skip 语义(§3.2→T2)、配置(§3.3→T1)、IPC(§3.4→T2)、冒泡(§4.1→T3)、状态机(§4.2→T3)、交互(§4.3→T3)、边界(§5→T2 钳制/T3 冒烟)、测试(§6→T1/T2/T3)。
 - 无占位符：所有代码步骤含完整实现。
 - 类型一致：payload `{kind, preview, secret}` 在 pet.js 生成、IPC 透传、pet.js 渲染层消费一致；配置 pet 字段名在 privacyConfig/pet.js/index.js/tray 一致。
-- 测试计数：基线 76 → T1 后 81 → T2 后 85（pet.test.js 4 条）→ T3 不增（渲染层惯例）。
+- 测试计数：基线 76 → T1 后 82（5 新 + 1 审查修正）→ T2 后 86（pet.test.js 4 条）→ T3 不增（渲染层惯例）。
