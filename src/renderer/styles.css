@@ -143,3 +143,86 @@ body {
   cursor: pointer;
   flex-shrink: 0;
 }
+
+/* 片段抽屉按钮（固定在日期抽屉之上） */
+.drawer.snippets-drawer { font-weight: 600; }
+.drawer.snippets-drawer .drawer-label::before { content: '📌 '; }
+
+/* 条目行内 Pin 按钮与触发词徽章 */
+.item-pin {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  visibility: hidden;
+  flex-shrink: 0;
+}
+.item:hover .item-pin { visibility: visible; }
+.item-pin.pinned { visibility: visible; color: var(--accent); }
+.item-trigger {
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--active-bg);
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  font-family: ui-monospace, monospace;
+}
+
+/* 打码渲染 */
+.item-secret-mask { color: var(--text-dim); letter-spacing: 2px; }
+.item-secret-show {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Pin 表单弹层 */
+#pin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+#pin-overlay[hidden] { display: none; }
+#pin-form {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#pin-form h3 { margin: 0; font-size: 14px; }
+#pin-form label { font-size: 12px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+#pin-form input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-side);
+  color: var(--text);
+  outline: none;
+}
+#pin-form input:focus { border-color: var(--accent); }
+#pin-error { color: var(--danger); font-size: 12px; min-height: 14px; margin: 0; }
+#pin-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+#pin-buttons button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+#pin-buttons .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+#clear-day:disabled { opacity: 0.4; cursor: default; }
+#clear-day:disabled:hover { color: var(--text-dim); border-color: var(--border); }

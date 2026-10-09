@@ -2,6 +2,10 @@ window.addEventListener('unhandledrejection', (e) => console.error('IPC 调用�
 
 const state = { days: [], selected: null, keyword: '', items: [], selectedIndex: -1 };
 
+const SNIPPETS_KEY = '__snippets__';
+state.snippetGroups = [];
+state.snippetCount = 0;
+
 const drawersEl = document.getElementById('drawers');
 const itemsEl = document.getElementById('items');
 const titleEl = document.getElementById('content-title');
@@ -32,6 +36,17 @@ function labelFor(dateKey) {
 
 function renderDrawers() {
   drawersEl.innerHTML = '';
+  const snip = document.createElement('button');
+  snip.className = 'drawer snippets-drawer' + (state.selected === SNIPPETS_KEY && !state.keyword ? ' active' : '');
+  const snipLabel = document.createElement('span');
+  snipLabel.className = 'drawer-label';
+  snipLabel.textContent = '片段';
+  const snipCount = document.createElement('span');
+  snipCount.className = 'drawer-count';
+  snipCount.textContent = state.snippetCount;
+  snip.append(snipLabel, snipCount);
+  snip.addEventListener('click', () => selectSnippets());
+  drawersEl.appendChild(snip);
   for (const day of state.days) {
     const btn = document.createElement('button');
     btn.className = 'drawer' + (state.selected === day.dateKey && !state.keyword ? ' active' : '');
@@ -48,7 +63,10 @@ function renderDrawers() {
 }
 
 async function refreshDays() {
-  state.days = await window.api.listDays();
+  const [days, groups] = await Promise.all([window.api.listDays(), window.api.listSnippets()]);
+  state.days = days;
+  state.snippetGroups = groups;
+  state.snippetCount = groups.reduce((n, g) => n + g.items.length, 0);
   renderDrawers();
 }
 
@@ -57,10 +75,42 @@ async function selectDay(dateKey) {
   state.keyword = '';
   searchEl.value = '';
   renderDrawers();
+  clearBtn.disabled = false;
   state.selectedIndex = -1;
   const items = await window.api.listByDay(dateKey);
   titleEl.textContent = `${labelFor(dateKey)} · ${items.length} 条`;
   renderItems(items);
+}
+
+async function selectSnippets() {
+  state.selected = SNIPPETS_KEY;
+  state.keyword = '';
+  searchEl.value = '';
+  renderDrawers();
+  state.selectedIndex = -1;
+  clearBtn.disabled = true;
+  const groups = await window.api.listSnippets();
+  state.snippetGroups = groups;
+  state.snippetCount = groups.reduce((n, g) => n + g.items.length, 0);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  titleEl.textContent = `📌 片段 · ${total} 条`;
+  itemsEl.innerHTML = '';
+  if (!total) {
+    state.items = [];
+    itemsEl.innerHTML = '<div class="empty">还没有片段：在任意文本条目上点 📌 即可创建</div>';
+    return;
+  }
+  state.items = [];
+  for (const g of groups) {
+    const h = document.createElement('div');
+    h.className = 'search-group';
+    h.textContent = `${g.name} · ${g.items.length} 条`;
+    itemsEl.appendChild(h);
+    for (const item of g.items) {
+      state.items.push(item);
+      itemsEl.appendChild(itemRow(item));
+    }
+  }
 }
 
 function renderItems(items) {
@@ -97,10 +147,54 @@ function itemRow(item) {
   } else {
     const preview = document.createElement('span');
     preview.className = 'item-text';
-    preview.textContent = truncate(item.text);
-    preview.title = item.text;
+    if (item.secret) {
+      preview.classList.add('item-secret-mask');
+      preview.textContent = '••••••••••';
+      preview.title = '已隐藏的密码条目';
+    } else {
+      preview.textContent = truncate(item.text);
+      preview.title = item.text;
+    }
     preview.addEventListener('click', () => window.api.copyClip(item.id));
     row.append(time, preview);
+
+    if (item.secret) {
+      const show = document.createElement('button');
+      show.className = 'item-secret-show';
+      show.textContent = '显示';
+      show.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (show.textContent === '显示') {
+          preview.textContent = truncate(item.text, 120);
+          preview.title = item.text;
+          preview.classList.remove('item-secret-mask');
+          show.textContent = '隐藏';
+        } else {
+          preview.textContent = '••••••••••';
+          preview.title = '已隐藏的密码条目';
+          preview.classList.add('item-secret-mask');
+          show.textContent = '显示';
+        }
+      });
+      row.append(show);
+    }
+
+    const pin = document.createElement('button');
+    pin.className = 'item-pin' + (item.pinned ? ' pinned' : '');
+    pin.textContent = '📌';
+    pin.title = item.pinned ? '修改/取消 Pin' : 'Pin 成片段';
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPinForm(item);
+    });
+    row.append(pin);
+
+    if (item.pinned && item.trigger_word) {
+      const badge = document.createElement('span');
+      badge.className = 'item-trigger';
+      badge.textContent = `⌁ ${item.trigger_word}`;
+      row.append(badge);
+    }
   }
 
   const del = document.createElement('button');
@@ -126,7 +220,76 @@ function imageLabel(item) {
   return label;
 }
 
+// ---- Pin 表单弹层 ----
+const pinOverlay = document.createElement('div');
+pinOverlay.id = 'pin-overlay';
+pinOverlay.hidden = true;
+pinOverlay.innerHTML = `
+  <div id="pin-form">
+    <h3>Pin 成片段</h3>
+    <label>触发词（可选，输入面板里敲这个词快速找到）
+      <input id="pin-trigger" type="text" placeholder="如 addr" maxlength="32">
+    </label>
+    <label>分组（可选）
+      <input id="pin-group" type="text" placeholder="如 工作" maxlength="32">
+    </label>
+    <p id="pin-error"></p>
+    <div id="pin-buttons">
+      <button type="button" id="pin-cancel">取消</button>
+      <button type="button" id="pin-confirm" class="primary">确定</button>
+      <button type="button" id="pin-remove">取消 Pin</button>
+    </div>
+  </div>`;
+document.body.appendChild(pinOverlay);
+
+let pinTargetId = null;
+
+function openPinForm(item) {
+  pinTargetId = item.id;
+  document.getElementById('pin-trigger').value = item.trigger_word || '';
+  document.getElementById('pin-group').value = item.group_name || '';
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-remove').style.display = item.pinned ? '' : 'none';
+  pinOverlay.hidden = false;
+  document.getElementById('pin-trigger').focus();
+}
+
+function closePinForm() {
+  pinOverlay.hidden = true;
+  pinTargetId = null;
+}
+
+document.getElementById('pin-cancel').addEventListener('click', closePinForm);
+pinOverlay.addEventListener('click', (e) => { if (e.target === pinOverlay) closePinForm(); });
+
+document.getElementById('pin-remove').addEventListener('click', async () => {
+  if (pinTargetId == null) return;
+  await window.api.unpinClip(pinTargetId);
+  closePinForm();
+  refreshAfterMutation();
+  if (state.selected === SNIPPETS_KEY) selectSnippets();
+});
+
+document.getElementById('pin-confirm').addEventListener('click', async () => {
+  if (pinTargetId == null) return;
+  const trigger = document.getElementById('pin-trigger').value.trim();
+  const group = document.getElementById('pin-group').value.trim();
+  const res = await window.api.pinClip(pinTargetId, trigger || null, group || null);
+  if (!res.ok) {
+    document.getElementById('pin-error').textContent = res.error || '保存失败';
+    return;
+  }
+  closePinForm();
+  refreshAfterMutation();
+  if (state.selected === SNIPPETS_KEY) selectSnippets();
+});
+
 async function refreshAfterMutation() {
+  if (state.selected === SNIPPETS_KEY && !state.keyword) {
+    await refreshDays();
+    selectSnippets();
+    return;
+  }
   if (state.keyword) {
     await Promise.all([doSearch(), refreshDays()]);
   } else if (state.selected) {
@@ -171,6 +334,7 @@ searchEl.addEventListener('input', () => {
 });
 
 clearBtn.addEventListener('click', async () => {
+  if (state.selected === SNIPPETS_KEY) return;
   if (!state.selected || state.keyword) return;
   await window.api.clearDay(state.selected);
   await refreshDays();
@@ -208,6 +372,7 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (e.key === 'Escape') {
+    if (!pinOverlay.hidden) { closePinForm(); return; }
     if (document.activeElement === searchEl && searchEl.value) {
       e.preventDefault();
       clearSearch();
