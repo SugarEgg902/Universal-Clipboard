@@ -3,6 +3,16 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 const { toDateKey, dayRange } = require('./dates');
+const { pinyin } = require('pinyin-pro');
+
+// Me-Search：仅含 CJK 的行物化拼音（连续、无音调、小写），罗马查询时命中
+const CJK_RE = /[一-鿿]/;
+function hasCJK(text) {
+  return CJK_RE.test(text);
+}
+function toPinyin(text) {
+  return pinyin(text, { toneType: 'none', type: 'string', separator: '' }).toLowerCase();
+}
 
 class ClipStore {
   constructor(dbPath = ':memory:', imagesDir = null) {
@@ -18,14 +28,15 @@ class ClipStore {
         height INTEGER,
         pinned INTEGER NOT NULL DEFAULT 0,
         trigger_word TEXT,
-        group_name TEXT
+        group_name TEXT,
+        pinyin TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_created_at ON clips(created_at);
     `);
     if (imagesDir) fs.mkdirSync(imagesDir, { recursive: true });
     this.imagesDir = imagesDir;
     this.migrate();
-    this.insertStmt = this.db.prepare('INSERT INTO clips (text, created_at) VALUES (?, ?)');
+    this.insertStmt = this.db.prepare('INSERT INTO clips (text, created_at, pinyin) VALUES (?, ?, ?)');
     this.existsStmt = this.db.prepare(
       'SELECT id FROM clips WHERE text = ? AND created_at >= ? AND created_at < ?'
     );
@@ -93,6 +104,21 @@ class ClipStore {
     if (!cols.includes('group_name')) {
       this.db.exec('ALTER TABLE clips ADD COLUMN group_name TEXT');
     }
+    if (!cols.includes('pinyin')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN pinyin TEXT');
+      this.backfillPinyin();
+    }
+  }
+
+  // Me-Search 存量回填：pinyin 为 NULL 的文本行中含中文者补拼音（迁移一次性调用；测试可直接调用）
+  backfillPinyin() {
+    const rows = this.db.prepare(
+      "SELECT id, text FROM clips WHERE type = 'text' AND pinyin IS NULL"
+    ).all();
+    const upd = this.db.prepare('UPDATE clips SET pinyin = ? WHERE id = ?');
+    for (const r of rows) {
+      if (hasCJK(r.text)) upd.run(toPinyin(r.text), r.id);
+    }
   }
 
   // 返回 lastInsertRowid；空白文本或当天重复时返回 null
@@ -101,7 +127,7 @@ class ClipStore {
     if (!trimmed) return null;
     const [start, end] = dayRange(toDateKey(now));
     if (this.existsStmt.get(trimmed, start, end)) return null;
-    return this.insertStmt.run(trimmed, now).lastInsertRowid;
+    return this.insertStmt.run(trimmed, now, hasCJK(trimmed) ? toPinyin(trimmed) : null).lastInsertRowid;
   }
 
   // 图片入库：sha256 哈希命名文件写入 imagesDir（同哈希复用同一文件），元数据入库。
@@ -231,4 +257,4 @@ function openStore(dbPath, imagesDir = null) {
   return new ClipStore(dbPath, imagesDir);
 }
 
-module.exports = { ClipStore, openStore };
+module.exports = { ClipStore, openStore, toPinyin, hasCJK };

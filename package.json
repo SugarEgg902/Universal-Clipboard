@@ -18,14 +18,26 @@
     "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0"
+    "better-sqlite3": "^11.3.0",
+    "pinyin-pro": "^3.29.4"
   },
   "build": {
     "appId": "com.clipboarddrawer.app",
     "productName": "ClipboardDrawer",
-    "files": ["src/**/*", "assets/**/*", "package.json"],
-    "mac": { "category": "public.app-category.utilities" },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage", "category": "Utility" }
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
+    }
   }
 }
