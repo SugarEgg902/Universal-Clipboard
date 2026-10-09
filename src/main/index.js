@@ -127,7 +127,7 @@ app.whenReady().then(() => {
     }
   });
 
-  registerIpc({ store, getWindow: () => win, imagesDir });
+  registerIpc({ store, getWindow: () => win, imagesDir, getPaletteWindow: () => null, paster: null });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
