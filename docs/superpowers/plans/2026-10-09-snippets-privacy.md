@@ -657,14 +657,21 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster }) 
 
   // 快速面板粘贴：写剪贴板 → 隐藏面板 → 模拟粘贴。
   // 粘贴失败时内容已在剪贴板，渲染层提示手动粘贴。
+  // 错误信封统一为 { ok, error }：paste 的 error 是机器码（not-found/unsupported-platform/paste-failed）
   ipcMain.handle('clipboard:pasteSnippet', async (_event, id) => {
     const row = store.get(id);
-    if (!row || row.type !== 'text') return { ok: false, reason: 'not-found' };
+    if (!row) return { ok: false, error: 'not-found' };
+    if (row.type !== 'text') return { ok: false, error: 'unsupported-type' };
     clipboard.writeText(row.text);
     const palette = getPaletteWindow && getPaletteWindow();
     if (palette) palette.hide();
-    if (!paster) return { ok: false, reason: 'unsupported-platform' };
-    return paster.paste();
+    if (!paster) return { ok: false, error: 'unsupported-platform' };
+    try {
+      return await paster.paste();
+    } catch (err) {
+      console.error('模拟粘贴失败:', err);
+      return { ok: false, error: 'paste-failed' };
+    }
   });
 
   ipcMain.handle('window:hide', () => {
@@ -702,6 +709,7 @@ contextBridge.exposeInMainWorld('api', {
 - [ ] **Step 3: index.js registerIpc 调用点更新**
 
 ```js
+  // TODO(Task 5): 替换为真实依赖 getPaletteWindow: () => palette.getWindow(), paster
   registerIpc({ store, getWindow: () => win, imagesDir, getPaletteWindow: () => null, paster: null });
 ```
 
@@ -1377,7 +1385,7 @@ function initPalette() {
   async function paste(id) {
     const res = await window.api.pasteSnippet(id);
     if (!res || !res.ok) {
-      hint.textContent = res && res.reason === 'paste-failed'
+      hint.textContent = res && res.error === 'paste-failed'
         ? '已复制到剪贴板，但模拟粘贴失败——请到 系统设置 → 隐私与安全性 → 辅助功能 授权后手动 Cmd+V'
         : '已复制到剪贴板，请手动粘贴（Cmd/Ctrl+V）';
       hint.hidden = false;
