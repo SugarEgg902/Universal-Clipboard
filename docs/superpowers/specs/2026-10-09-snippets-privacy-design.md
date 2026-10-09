@@ -27,18 +27,17 @@
 
 ```sql
 ALTER TABLE clips ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE clips ADD COLUMN trigger TEXT;
+ALTER TABLE clips ADD COLUMN trigger_word TEXT;
 ALTER TABLE clips ADD COLUMN group_name TEXT;
 ```
 
 ### 新 API
 
-- `pin(id, trigger, groupName)` — 设 pinned=1 + 触发词 + 分组；触发词冲突（同词不同条目，不区分大小写）抛错。触发词可为空（仅分组收藏）。
-- `unpin(id)` — pinned=0，清 trigger/group_name。
-- `updatePin(id, trigger, groupName)` — 修改触发词/分组，同样校验唯一性。
+- `pin(id, trigger, groupName)` — 设 pinned=1 + 触发词 + 分组；触发词冲突（同词不同条目，不区分大小写）抛错。触发词可为空（仅分组收藏）。**pin 即 upsert**（已 Pin 条目再调用于修改触发词/分组），updatePin 不单独存在。
+- `unpin(id)` — pinned=0，清 trigger_word/group_name。
 - `listSnippets()` — 所有 pinned 条目，按 group_name 分组（null 归"未分组"），组内按 created_at 倒序。
-- `findByTrigger(trigger)` — 按触发词（不区分大小写）查 pinned 条目，快速面板用。
-- 触发词唯一性：新建/修改时查询 `WHERE pinned=1 AND lower(trigger)=lower(?)`。
+- 触发词唯一性：新建/修改时查询 `WHERE pinned=1 AND lower(trigger_word)=lower(?)`。
+- **计划期裁剪**：`findByTrigger` 取消——快速面板改为 `listSnippets()` 全量返回 + 渲染层本地过滤（即时、省一次 IPC），不单独查库。
 - v2 已有行为不变：**仅文本条目可 Pin**（片段本质是文本短语；图片条目不出现 Pin 按钮），搜索照常（片段仍是 clips 行）。
 
 ## 4. 主进程变更
