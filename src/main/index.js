@@ -10,6 +10,8 @@ const { ClipboardWatcher } = require('./watcher');
 const { registerIpc } = require('./ipc');
 const { looksLikeSecret } = require('./secretDetector');
 const privacyConfig = require('./privacyConfig');
+const { createPalette } = require('./palette');
+const paster = require('./paster');
 
 // 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
 // （主机名必须为 non-numeric：standard scheme 下纯数字主机会被 Chromium 归一化为 IPv4）
@@ -24,6 +26,7 @@ let win = null;
 let tray = null;
 let store = null;
 let watcher = null;
+let palette = null;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -112,6 +115,8 @@ app.whenReady().then(() => {
   store = openStore(dbPath, imagesDir);
   privacyConfig.init(app.getPath('userData'));
 
+  palette = createPalette({ rendererDir: path.join(__dirname, '..', 'renderer') });
+
   protocol.handle('clipimg', async (request) => {
     try {
       const url = new URL(request.url);
@@ -127,8 +132,13 @@ app.whenReady().then(() => {
     }
   });
 
-  // TODO(Task 5): 替换为真实依赖 getPaletteWindow: () => palette.getWindow(), paster
-  registerIpc({ store, getWindow: () => win, imagesDir, getPaletteWindow: () => null, paster: null });
+  registerIpc({
+    store,
+    getWindow: () => win,
+    imagesDir,
+    getPaletteWindow: () => palette && palette.getWindow(),
+    paster,
+  });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -176,6 +186,9 @@ app.whenReady().then(() => {
 
   const registered = globalShortcut.register('CommandOrControl+Shift+V', showWindow);
   if (!registered) console.error('全局快捷键 CommandOrControl+Shift+V 注册失败');
+
+  const paletteRegistered = globalShortcut.register('CommandOrControl+Shift+;', () => palette.show());
+  if (!paletteRegistered) console.error('全局快捷键 CommandOrControl+Shift+; 注册失败');
 
   createWindow();
   showWindow(); // 首次启动展示一次
