@@ -446,16 +446,19 @@ if (IS_PALETTE) {
 // initPalette 函数声明放在文件最末尾（函数声明提升，顶部调用安全）
 function initPalette() {
   document.body.classList.add('palette');
+  document.getElementById('content').insertBefore(searchEl, titleEl);
+  searchEl.placeholder = '输入触发词或内容过滤…';
   const hint = document.createElement('div');
   hint.id = 'palette-hint';
   hint.hidden = true;
   document.body.appendChild(hint);
+  let hintTimer = null;
 
-  const pState = { groups: [], items: [], selectedIndex: -1, keyword: '' };
+  const pState = { groups: [], items: [], shown: [], selectedIndex: -1, keyword: '' };
 
   async function load() {
     pState.groups = await window.api.listSnippets();
-    pState.items = pState.groups.flatMap((g) => g.items);
+    pState.items = pState.groups.flatMap((g) => g.items).filter((it) => it.type === 'text');
     render();
   }
 
@@ -473,6 +476,7 @@ function initPalette() {
       );
       shown = [...byTrigger, ...byText];
     }
+    pState.shown = shown;
     titleEl.textContent = q
       ? `片段 · ${shown.length}/${pState.items.length} 条`
       : `📌 片段 · ${pState.items.length} 条（↑↓ 选择，Enter 粘贴）`;
@@ -504,11 +508,16 @@ function initPalette() {
   async function paste(id) {
     const res = await window.api.pasteSnippet(id);
     if (!res || !res.ok) {
-      hint.textContent = res && res.error === 'paste-failed'
-        ? '已复制到剪贴板，但模拟粘贴失败——请到 系统设置 → 隐私与安全性 → 辅助功能 授权后手动 Cmd+V'
-        : '已复制到剪贴板，请手动粘贴（Cmd/Ctrl+V）';
+      if (res && (res.error === 'not-found' || res.error === 'unsupported-type')) {
+        hint.textContent = '该片段已不存在或类型不支持，请重新打开面板';
+      } else if (res && res.error === 'paste-failed') {
+        hint.textContent = '已复制到剪贴板，但模拟粘贴失败——请到 系统设置 → 隐私与安全性 → 辅助功能 授权后手动 Cmd+V';
+      } else {
+        hint.textContent = '已复制到剪贴板，请手动粘贴（Cmd/Ctrl+V）';
+      }
       hint.hidden = false;
-      setTimeout(() => { hint.hidden = true; }, 5000);
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { hint.hidden = true; }, 5000);
     }
   }
 
@@ -539,20 +548,7 @@ function initPalette() {
       const rows = itemsEl.querySelectorAll('.item');
       const target = rows[pState.selectedIndex];
       if (target) {
-        // 行上没有存 id，从可见顺序反查：重算当前过滤结果
-        const q = pState.keyword.toLowerCase();
-        let shown = pState.items;
-        if (q) {
-          const byTrigger = pState.items.filter(
-            (it) => it.trigger_word && it.trigger_word.toLowerCase().startsWith(q)
-          );
-          const byText = pState.items.filter(
-            (it) => !(it.trigger_word && it.trigger_word.toLowerCase().startsWith(q)) &&
-              it.text.toLowerCase().includes(q)
-          );
-          shown = [...byTrigger, ...byText];
-        }
-        const item = shown[pState.selectedIndex];
+        const item = pState.shown[pState.selectedIndex];
         if (item) paste(item.id);
       }
     }
