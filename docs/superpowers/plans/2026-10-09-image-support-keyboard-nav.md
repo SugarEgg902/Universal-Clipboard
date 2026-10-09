@@ -904,7 +904,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (document.activeElement === searchEl) {
-    // 输入框内：可打字、Enter 不复制、↑↓ 交给列表导航
+    // 输入框内：可打字、↑↓ 交给列表导航、Enter 复制选中项（无选中则惰性）
+    // （修正案：原计划"Enter 不复制"使键盘主流程断裂，60d9f08 改为有选中时复制）
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   }
 

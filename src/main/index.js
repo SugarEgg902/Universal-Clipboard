@@ -9,7 +9,8 @@ const { openStore } = require('./store');
 const { ClipboardWatcher } = require('./watcher');
 const { registerIpc } = require('./ipc');
 
-// 缩略图自定义协议：clipimg://<id>，仅允许返回 images 目录内的图片文件
+// 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
+// （主机名必须为 non-numeric：standard scheme 下纯数字主机会被 Chromium 归一化为 IPv4）
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'clipimg',
