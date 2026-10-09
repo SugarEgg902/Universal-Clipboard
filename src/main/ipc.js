@@ -19,8 +19,8 @@ function withSecret(row) {
 
 const withMeta = (row) => withSecret(withThumb(row));
 
-// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp }
-function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp }) {
+// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig }
+function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
   // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
   // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
@@ -118,6 +118,40 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
     if (win) win.hide();
     const palette = getPaletteWindow && getPaletteWindow();
     if (palette) palette.hide();
+  });
+
+  // ---- 桌宠 ----
+
+  ipcMain.handle('pet:drag', (_event, dx, dy) => {
+    if (pet) pet.applyDrag(Number(dx) || 0, Number(dy) || 0);
+  });
+  ipcMain.handle('pet:drag-end', () => {
+    if (pet) pet.persistPosition();
+  });
+  ipcMain.handle('pet:open-main', () => {
+    if (showWindow) showWindow();
+  });
+  ipcMain.handle('pet:open-palette', () => {
+    if (showPalette) showPalette();
+  });
+  ipcMain.handle('pet:context-menu', () => {
+    const { Menu } = require('electron');
+    Menu.buildFromTemplate([
+      { label: '打开主窗口', click: () => showWindow && showWindow() },
+      { label: '快速粘贴面板', click: () => showPalette && showPalette() },
+      { type: 'separator' },
+      {
+        label: '禁用桌宠',
+        click: () => {
+          privacyConfig.setPet({ enabled: false });
+          if (pet) pet.hide();
+        },
+      },
+    ]).popup();
+  });
+  ipcMain.handle('pet:set-emoji', (_event, emoji) => {
+    privacyConfig.setPet({ emoji });
+    if (pet) pet.setEmoji(emoji);
   });
 }
 

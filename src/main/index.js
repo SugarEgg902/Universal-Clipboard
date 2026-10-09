@@ -11,6 +11,7 @@ const { registerIpc } = require('./ipc');
 const { looksLikeSecret } = require('./secretDetector');
 const privacyConfig = require('./privacyConfig');
 const { createPalette } = require('./palette');
+const { createPet, buildClipPayload } = require('./pet');
 const paster = require('./paster');
 
 // 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
@@ -27,6 +28,7 @@ let tray = null;
 let store = null;
 let watcher = null;
 let palette = null;
+let pet = null;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -85,6 +87,28 @@ function createTray() {
       },
     },
     {
+      label: '桌宠',
+      type: 'checkbox',
+      checked: privacyConfig.getPet().enabled,
+      click: (item) => {
+        privacyConfig.setPet({ enabled: item.checked });
+        if (item.checked) pet.show();
+        else pet.hide();
+      },
+    },
+    {
+      label: '桌宠形象',
+      submenu: privacyConfig.PET_EMOJIS.map((e) => ({
+        label: e,
+        type: 'radio',
+        checked: privacyConfig.getPet().emoji === e,
+        click: () => {
+          privacyConfig.setPet({ emoji: e });
+          if (pet) pet.setEmoji(e);
+        },
+      })),
+    },
+    {
       label: '隐私模式',
       submenu: [
         {
@@ -117,6 +141,12 @@ app.whenReady().then(() => {
 
   palette = createPalette({ rendererDir: path.join(__dirname, '..', 'renderer') });
 
+  pet = createPet({
+    rendererDir: path.join(__dirname, '..', 'renderer'),
+    getPetConfig: () => privacyConfig.getPet(),
+    onMoved: (x, y) => privacyConfig.setPet({ x, y }),
+  });
+
   protocol.handle('clipimg', async (request) => {
     try {
       const url = new URL(request.url);
@@ -139,6 +169,10 @@ app.whenReady().then(() => {
     getPaletteWindow: () => palette && palette.getWindow(),
     paster,
     hideApp: process.platform === 'darwin' ? () => app.hide() : null,
+    pet,
+    showWindow,
+    showPalette: () => palette.show(),
+    privacyConfig,
   });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -163,18 +197,25 @@ app.whenReady().then(() => {
       try {
         // 检测器本身不 trim（含空白即不判定是对多行内容的严格排除）；
         // 调用点 trim 以兜住"终端复制带尾换行的密码"这一常见形态。
-        if (privacyConfig.getMode() === 'skip' && looksLikeSecret(String(text).trim())) {
+        const trimmed = String(text).trim();
+        if (privacyConfig.getMode() === 'skip' && looksLikeSecret(trimmed)) {
           console.log('[隐私] 已跳过疑似密码内容（完全不记录模式）');
           return;
         }
-        store.insert(text);
+        const id = store.insert(text);
+        if (id != null && pet) {
+          pet.notifyClip(buildClipPayload({ kind: 'text', text: trimmed, secret: looksLikeSecret(trimmed) }));
+        }
       } catch (err) {
         console.error('剪贴板写入数据库失败:', err);
       }
     },
     onImage: (img) => {
       try {
-        store.insertImage(img.buffer, img.width, img.height);
+        const id = store.insertImage(img.buffer, img.width, img.height);
+        if (id != null && pet) {
+          pet.notifyClip(buildClipPayload({ kind: 'image', width: img.width, height: img.height }));
+        }
       } catch (err) {
         console.error('图片写入数据库失败:', err);
       }
@@ -190,6 +231,8 @@ app.whenReady().then(() => {
 
   const paletteRegistered = globalShortcut.register('CommandOrControl+Shift+;', () => palette.show());
   if (!paletteRegistered) console.error('全局快捷键 CommandOrControl+Shift+; 注册失败');
+
+  if (privacyConfig.getPet().enabled) pet.show();
 
   createWindow();
   showWindow(); // 首次启动展示一次

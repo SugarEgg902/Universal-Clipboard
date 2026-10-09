@@ -13,4 +13,12 @@ contextBridge.exposeInMainWorld('api', {
   pasteSnippet: (id) => ipcRenderer.invoke('clipboard:pasteSnippet', id),
   hideWindow: () => ipcRenderer.invoke('window:hide'),
   onWindowShown: (callback) => ipcRenderer.on('window-shown', () => callback()),
+  petDrag: (dx, dy) => ipcRenderer.invoke('pet:drag', dx, dy),
+  petDragEnd: () => ipcRenderer.invoke('pet:drag-end'),
+  petOpenMain: () => ipcRenderer.invoke('pet:open-main'),
+  petOpenPalette: () => ipcRenderer.invoke('pet:open-palette'),
+  petContextMenu: () => ipcRenderer.invoke('pet:context-menu'),
+  petSetEmoji: (emoji) => ipcRenderer.invoke('pet:set-emoji', emoji),
+  onPetClip: (callback) => ipcRenderer.on('pet:clip', (_e, payload) => callback(payload)),
+  onPetEmoji: (callback) => ipcRenderer.on('pet:emoji', (_e, emoji) => callback(emoji)),
 });
