@@ -4,7 +4,9 @@
 
 **Goal:** 在已合并 main 的剪贴板抽屉柜上增量增加：剪贴板图片捕获/存储/缩略图展示/点击复制，以及键盘导航（↑↓ 选择、Enter 复制、Cmd/Ctrl+K 聚焦搜索、Esc 语义细化）。
 
-**Architecture:** 图片以 PNG 文件存 `userData/images/<sha256前16位>.png`（同哈希复用），SQLite 存元数据（type/image_path/width/height），旧库启动时 ALTER 迁移。渲染端通过自定义 `clipimg://<id>` 协议加载缩略图。键盘导航为渲染层状态（selectedIndex）+ 全局 keydown。
+**Architecture:** 图片以 PNG 文件存 `userData/images/<sha256前16位>.png`（同哈希复用），SQLite 存元数据（type/image_path/width/height），旧库启动时 ALTER 迁移。渲染端通过自定义 `clipimg://thumb/<id>` 协议加载缩略图。键盘导航为渲染层状态（selectedIndex）+ 全局 keydown。
+
+> **执行期修正案（2026-10-09）**：Task 5 集成冒烟发现 `clipimg://<id>` 在 standard scheme 下被 Chromium 把纯数字主机名归一化为 IPv4（`clipimg://12` → `clipimg://0.0.0.12/`），导致缩略图 404。已改为 `clipimg://thumb/<id>` 并从 pathname 解析 id（提交 b91652e，CDP 验证 200）。
 
 **Tech Stack:** Electron 33 (protocol.handle), better-sqlite3, node:crypto, node:test
 
@@ -536,7 +538,7 @@ const { getLast7Days, formatLabel } = require('./dates');
 // 图片条目附带缩略图协议地址；文本条目 thumb 为 null
 function withThumb(row) {
   return row.type === 'image'
-    ? { ...row, text: '', thumb: `clipimg://${row.id}` }
+    ? { ...row, text: '', thumb: `clipimg://thumb/${row.id}` }
     : { ...row, thumb: null };
 }
 
@@ -618,7 +620,8 @@ const { registerIpc } = require('./ipc');
 在 `let win = null;` 等模块级变量之前加入协议注册（必须在 app ready 之前）：
 
 ```js
-// 缩略图自定义协议：clipimg://<id>，仅允许返回 images 目录内的图片文件
+// 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
+// （主机名必须为 non-numeric：standard scheme 下纯数字主机会被 Chromium 归一化为 IPv4，如 clipimg://12 → clipimg://0.0.0.12/）
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'clipimg',
@@ -637,7 +640,8 @@ app.whenReady().then(() => {
 
   protocol.handle('clipimg', async (request) => {
     try {
-      const id = Number(new URL(request.url).hostname);
+      const url = new URL(request.url);
+      const id = Number(url.pathname.split('/').filter(Boolean)[0]);
       const row = store.get(id);
       if (!row || row.type !== 'image' || !row.image_path) {
         return new Response(null, { status: 404 });
