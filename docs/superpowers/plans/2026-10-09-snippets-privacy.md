@@ -1273,6 +1273,8 @@ git commit -m "feat: 渲染层片段视图与 Pin 表单、密码打码渲染"
 
 ## Task 7: 渲染层面板模式（?palette=1）
 
+> **执行期修订（质量审查 Critical 修复）**：原计划 `body.palette #sidebar{display:none}` 会连带隐藏 `#sidebar` 内唯一的 `#search` 输入框，导致过滤功能整体不可达。修复：`initPalette` 开头把 `searchEl` reparent 到 `#content`（`insertBefore(searchEl, titleEl)`）并改 placeholder 为「输入触发词或内容过滤…」（`#search` 样式是全局选择器，reparent 后样式不变）。另两处 Important 修复：render() 结果存入 `pState.shown`、Enter 路径直接取用（删除重复过滤逻辑）；`not-found`/`unsupported-type` 返回在 `clipboard.writeText` 之前，提示文案改为「该片段已不存在或类型不支持」。小修：hint 计时器 clearTimeout 重 arm；load() 过滤 `type==='text'`。
+
 **Files:**
 - Modify: `src/renderer/app.js`
 - Modify: `src/renderer/styles.css`
