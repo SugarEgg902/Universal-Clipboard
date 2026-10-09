@@ -11,14 +11,15 @@ const DEFAULT_PET = { enabled: true, x: null, y: null, emoji: '📦' };
 let configPath = null;
 let config = { privacyMode: 'mask', pet: { ...DEFAULT_PET } };
 
-function sanitizePet(pet) {
+function sanitizePet(pet, base) {
   const src = pet && typeof pet === 'object' ? pet : {};
-  const out = { ...DEFAULT_PET };
+  const out = { ...DEFAULT_PET, ...(base || {}) };
   if (typeof src.enabled === 'boolean') out.enabled = src.enabled;
   if (src.emoji && PET_EMOJIS.includes(src.emoji)) out.emoji = src.emoji;
   for (const k of ['x', 'y']) {
-    if (src[k] === null || src[k] === undefined) continue;
-    if (Number.isFinite(src[k]) && src[k] >= 0) out[k] = src[k];
+    if (src[k] === null) { out[k] = null; continue; }      // null = 重置默认角落
+    if (src[k] === undefined) continue;                     // 未提供 → 保留 base
+    if (Number.isFinite(src[k])) out[k] = src[k];           // 负数合法（左侧/上方副屏坐标）
   }
   return out;
 }
@@ -61,7 +62,11 @@ function getPet() {
 }
 
 function setPet(patch) {
-  config.pet = sanitizePet({ ...config.pet, ...patch });
+  const defined = {};
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (v !== undefined) defined[k] = v;
+  }
+  config.pet = sanitizePet({ ...config.pet, ...defined }, config.pet);
   write();
 }
 

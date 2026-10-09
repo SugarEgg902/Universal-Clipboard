@@ -88,15 +88,22 @@ test('setPet：深合并写盘且原子文件包含 privacyMode', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('setPet：非法字段被钳制（emoji 白名单 / x,y 数字或 null / enabled 布尔）', () => {
+test('setPet：emoji 白名单、坐标含负数（多屏合法）、非法值保留原值、null 重置', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
   privacyConfig.init(dir);
-  privacyConfig.setPet({ emoji: '💣', enabled: 'yes', x: 'abc', y: -5 });
-  const pet = privacyConfig.getPet();
-  assert.strictEqual(pet.emoji, '📦'); // 不在白名单 → 保持默认
-  assert.strictEqual(pet.enabled, true);
-  assert.strictEqual(pet.x, null);
-  assert.strictEqual(pet.y, null); // 负数视为非法
+  privacyConfig.setPet({ emoji: '💣', enabled: 'yes', x: 'abc' });
+  let pet = privacyConfig.getPet();
+  assert.strictEqual(pet.emoji, '📦');   // 白名单外 → 默认
+  assert.strictEqual(pet.enabled, true); // 非布尔 → 默认
+  assert.strictEqual(pet.x, null);       // 字符串 → 默认（首次无原值）
+  privacyConfig.setPet({ x: 100, y: -450 }); // 左侧副屏合法坐标
+  pet = privacyConfig.getPet();
+  assert.strictEqual(pet.x, 100);
+  assert.strictEqual(pet.y, -450);
+  privacyConfig.setPet({ x: 'bad' });    // 非法 → 保留原值 100
+  assert.strictEqual(privacyConfig.getPet().x, 100);
+  privacyConfig.setPet({ x: null });     // null = 重置默认角
+  assert.strictEqual(privacyConfig.getPet().x, null);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -109,4 +116,16 @@ test('setMode 与 setPet 独立不互相覆盖', () => {
   assert.strictEqual(saved.pet.emoji, '🐤');
   assert.strictEqual(saved.privacyMode, 'skip');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('init：换目录后 pet 状态重置为默认', () => {
+  const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  fs.writeFileSync(path.join(dirA, 'config.json'), JSON.stringify({ privacyMode: 'mask', pet: { emoji: '🐱' } }));
+  privacyConfig.init(dirA);
+  assert.strictEqual(privacyConfig.getPet().emoji, '🐱');
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dirB);
+  assert.strictEqual(privacyConfig.getPet().emoji, '📦');
+  fs.rmSync(dirA, { recursive: true, force: true });
+  fs.rmSync(dirB, { recursive: true, force: true });
 });
