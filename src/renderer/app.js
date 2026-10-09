@@ -267,7 +267,6 @@ document.getElementById('pin-remove').addEventListener('click', async () => {
   await window.api.unpinClip(pinTargetId);
   closePinForm();
   refreshAfterMutation();
-  if (state.selected === SNIPPETS_KEY) selectSnippets();
 });
 
 document.getElementById('pin-confirm').addEventListener('click', async () => {
@@ -281,7 +280,6 @@ document.getElementById('pin-confirm').addEventListener('click', async () => {
   }
   closePinForm();
   refreshAfterMutation();
-  if (state.selected === SNIPPETS_KEY) selectSnippets();
 });
 
 async function refreshAfterMutation() {
@@ -366,6 +364,16 @@ function clearSearch() {
 window.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
+  if (!pinOverlay.hidden) {
+    if (e.key === 'Escape') { closePinForm(); return; }
+    if (e.key === 'Enter' && (document.activeElement.id === 'pin-trigger' || document.activeElement.id === 'pin-group')) {
+      e.preventDefault();
+      document.getElementById('pin-confirm').click();
+      return;
+    }
+    return;
+  }
+
   if (mod && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     searchEl.focus();
@@ -374,7 +382,6 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (e.key === 'Escape') {
-    if (!pinOverlay.hidden) { closePinForm(); return; }
     if (document.activeElement === searchEl && searchEl.value) {
       e.preventDefault();
       clearSearch();
