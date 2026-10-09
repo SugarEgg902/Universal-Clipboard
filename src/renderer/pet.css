@@ -1,0 +1,67 @@
+:root { color-scheme: light dark; }
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+body { font-family: -apple-system, system-ui, sans-serif; }
+
+#stage { position: relative; width: 100%; height: 100%; pointer-events: none; }
+
+/* 吉祥物本体：可点可拖；其余透明区穿透 */
+#mascot {
+  position: absolute; right: 0; bottom: 0;
+  width: 64px; height: 64px;
+  font-size: 44px; line-height: 64px; text-align: center;
+  cursor: grab; pointer-events: auto;
+  animation: bob 3.2s ease-in-out infinite;
+}
+#mascot.dragging { cursor: grabbing; animation: none; }
+
+/* 待机小动作（JS 切 class，播完移除） */
+#mascot.blink   { animation: blink .5s ease; }
+#mascot.hop     { animation: hop .6s ease; }
+#mascot.look    { animation: look 3s ease; }
+#mascot.stretch { animation: stretch 3.2s ease; }
+#mascot.flip    { animation: flip .8s ease; }
+#mascot.shuffle { animation: shuffle 3s ease; }
+#mascot.excited { animation: hop .45s ease 2; }
+#mascot.hover   { animation: lean 1.2s ease-in-out infinite; }
+#mascot.sleepy  { animation: bob 6s ease-in-out infinite; filter: saturate(.6); }
+
+@keyframes bob     { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+@keyframes blink   { 50% { transform: scaleY(.15) } }
+@keyframes hop     { 50% { transform: translateY(-16px) } }
+@keyframes look    { 0%,100% { transform: rotate(0) } 25% { transform: rotate(-10deg) } 75% { transform: rotate(10deg) } }
+@keyframes stretch { 50% { transform: scaleY(1.2) scaleX(.9) } }
+@keyframes flip    { to { transform: rotate(360deg) } }
+@keyframes shuffle { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-8px) } 75% { transform: translateX(8px) } }
+@keyframes lean    { 0%,100% { transform: rotate(0) } 50% { transform: rotate(10deg) } }
+
+/* 打盹 */
+#zzz {
+  position: absolute; right: 40px; bottom: 56px;
+  font-size: 20px; pointer-events: none;
+  animation: zzz 2.4s ease-in-out infinite;
+}
+@keyframes zzz { 0% { opacity: 0; transform: translateY(6px) } 30% { opacity: 1 } 100% { opacity: 0; transform: translateY(-18px) } }
+
+/* 冒泡 */
+#bubble-layer { position: absolute; right: 8px; bottom: 68px; width: 184px;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; gap: 4px; }
+.bubble {
+  max-width: 184px; padding: 6px 10px;
+  background: var(--pet-bubble-bg, rgba(255,255,255,.95));
+  color: var(--pet-bubble-text, #222);
+  border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  font-size: 12px; line-height: 1.4; word-break: break-all;
+  animation: bubble-rise 3s ease forwards;
+}
+.bubble.secret { color: #888; }
+@keyframes bubble-rise {
+  0% { opacity: 0; transform: translateY(8px) scale(.9) }
+  10% { opacity: 1; transform: translateY(0) scale(1) }
+  80% { opacity: 1 }
+  100% { opacity: 0; transform: translateY(-14px) }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --pet-bubble-bg: rgba(40,40,46,.95); --pet-bubble-text: #eee; }
+}
