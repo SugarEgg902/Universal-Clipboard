@@ -257,3 +257,54 @@ mark {
   color: var(--text-dim);
   flex-shrink: 0;
 }
+
+/* 扫码快传：条目 QR 按钮（与 .item-pin/.item-delete 同约定——hover 才显形） */
+.item-qr {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  visibility: hidden;
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+.item:hover .item-qr { visibility: visible; }
+.item.selected .item-qr { visibility: visible; }
+.item-qr:hover { color: var(--accent); }
+
+/* 扫码快传：多选复选框与操作条 */
+.item-check { flex-shrink: 0; accent-color: var(--accent); }
+#check-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: var(--active-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+#check-bar[hidden] { display: none; }
+#check-bar button {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+#check-bar button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 扫码快传：当天二维码按钮（与 #clear-day 同风格） */
+#qr-day {
+  margin: 0 8px 8px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+#qr-day:hover { color: var(--accent); border-color: var(--accent); }

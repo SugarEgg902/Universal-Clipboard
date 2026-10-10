@@ -29,7 +29,7 @@ if (IS_PALETTE) {
   initPalette();
 } else {
   // ===== 主窗口逻辑 =====
-  const state = { days: [], selected: null, keyword: '', items: [], selectedIndex: -1 };
+  const state = { days: [], selected: null, keyword: '', items: [], selectedIndex: -1, checked: new Set() };
 
   const SNIPPETS_KEY = '__snippets__';
   state.snippetGroups = [];
@@ -151,6 +151,17 @@ if (IS_PALETTE) {
       thumb.addEventListener('error', () => thumb.replaceWith(imageLabel(item)));
       thumb.addEventListener('click', () => window.api.copyClip(item.id));
       row.append(time, thumb);
+      if (!(item.type === 'text' && item.secret)) {
+        const qr = document.createElement('button');
+        qr.className = 'item-qr';
+        qr.textContent = '📱';
+        qr.title = '生成二维码传到手机';
+        qr.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.api.qrShow({ kind: item.type === 'image' ? 'image' : 'text', id: item.id });
+        });
+        row.append(qr);
+      }
     } else {
       const preview = document.createElement('span');
       preview.className = 'item-text';
@@ -189,6 +200,20 @@ if (IS_PALETTE) {
       preview.addEventListener('click', () => window.api.copyClip(item.id));
       row.append(time, preview);
 
+      if (!item.secret) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'item-check';
+        cb.checked = state.checked.has(item.id);
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', () => {
+          if (cb.checked) state.checked.add(item.id);
+          else state.checked.delete(item.id);
+          updateCheckBar();
+        });
+        row.prepend(cb);
+      }
+
       if (item.secret) {
         const show = document.createElement('button');
         show.className = 'item-secret-show';
@@ -219,6 +244,18 @@ if (IS_PALETTE) {
         openPinForm(item);
       });
       row.append(pin);
+
+      if (!(item.type === 'text' && item.secret)) {
+        const qr = document.createElement('button');
+        qr.className = 'item-qr';
+        qr.textContent = '📱';
+        qr.title = '生成二维码传到手机';
+        qr.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.api.qrShow({ kind: item.type === 'image' ? 'image' : 'text', id: item.id });
+        });
+        row.append(qr);
+      }
 
       if (item.pinned && item.trigger_word) {
         const badge = document.createElement('span');
@@ -370,6 +407,42 @@ if (IS_PALETTE) {
     await window.api.clearDay(state.selected);
     await refreshDays();
     selectDay(state.selected);
+  });
+
+  // ---- 扫码快传：多选操作条与当天打包 ----
+  const checkBar = document.getElementById('check-bar');
+  const checkCount = document.getElementById('check-count');
+
+  function updateCheckBar() {
+    checkBar.hidden = state.checked.size === 0;
+    checkCount.textContent = `已选 ${state.checked.size} 条`;
+  }
+
+  document.getElementById('check-qr').addEventListener('click', () => {
+    window.api.qrShow({ kind: 'bundle', ids: [...state.checked] });
+    state.checked.clear();
+    updateCheckBar();
+    renderItems(state.items); // 重绘去勾
+  });
+
+  document.getElementById('check-cancel').addEventListener('click', () => {
+    state.checked.clear();
+    updateCheckBar();
+    renderItems(state.items);
+  });
+
+  document.getElementById('qr-day').addEventListener('click', () => {
+    const ids = state.items
+      .filter((it) => it.type === 'text' && !it.secret)
+      .map((it) => it.id);
+    if (!ids.length) {
+      const btn = document.getElementById('qr-day');
+      const old = btn.textContent;
+      btn.textContent = '无可传送文本';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+      return;
+    }
+    window.api.qrShow({ kind: 'bundle', ids });
   });
 
   function moveSelection(delta) {

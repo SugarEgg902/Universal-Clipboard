@@ -12,9 +12,15 @@
       <input id="search" type="text" placeholder="搜索剪贴历史…">
       <nav id="drawers"></nav>
       <button id="clear-day">清空当天</button>
+      <button id="qr-day">当天二维码</button>
     </aside>
     <main id="content">
       <header id="content-title"></header>
+      <div id="check-bar" hidden>
+        <span id="check-count"></span>
+        <button id="check-qr">生成二维码</button>
+        <button id="check-cancel">取消</button>
+      </div>
       <div id="items"></div>
     </main>
   </div>
