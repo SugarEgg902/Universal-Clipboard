@@ -129,3 +129,43 @@ test('init：换目录后 pet 状态重置为默认', () => {
   fs.rmSync(dirA, { recursive: true, force: true });
   fs.rmSync(dirB, { recursive: true, force: true });
 });
+
+test('getDataDir/setDataDir：默认 null，写盘与读取一致', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  assert.strictEqual(privacyConfig.getDataDir(), null);
+  privacyConfig.setDataDir('/Volumes/D/cut-data');
+  assert.strictEqual(privacyConfig.getDataDir(), '/Volumes/D/cut-data');
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(saved.dataDir, '/Volumes/D/cut-data');
+  assert.strictEqual(saved.privacyMode, 'mask'); // 其他字段不受影响
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setDataDir：空串与 null 归一为 null（恢复默认）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  privacyConfig.setDataDir('/x');
+  privacyConfig.setDataDir('');
+  assert.strictEqual(privacyConfig.getDataDir(), null);
+  privacyConfig.setDataDir('/x');
+  privacyConfig.setDataDir(null);
+  assert.strictEqual(privacyConfig.getDataDir(), null);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setDataDir：非字符串忽略；与 setPet/setMode 互不覆盖', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  privacyConfig.setPet({ emoji: '🐱' });
+  privacyConfig.setDataDir(123);
+  assert.strictEqual(privacyConfig.getDataDir(), null);
+  privacyConfig.setDataDir('/ok');
+  privacyConfig.setMode('skip');
+  privacyConfig.setPet({ x: 10 });
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(saved.dataDir, '/ok');
+  assert.strictEqual(saved.privacyMode, 'skip');
+  assert.strictEqual(saved.pet.emoji, '🐱');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

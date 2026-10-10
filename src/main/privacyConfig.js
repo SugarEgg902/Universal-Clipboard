@@ -7,9 +7,10 @@ const path = require('node:path');
 
 const PET_EMOJIS = ['📦', '🗃️', '🐱', '🐤'];
 const DEFAULT_PET = { enabled: true, x: null, y: null, emoji: '📦' };
+const DEFAULTS = { privacyMode: 'mask', dataDir: null };
 
 let configPath = null;
-let config = { privacyMode: 'mask', pet: { ...DEFAULT_PET } };
+let config = { ...DEFAULTS, pet: { ...DEFAULT_PET } };
 
 function sanitizePet(pet, base) {
   const src = pet && typeof pet === 'object' ? pet : {};
@@ -22,6 +23,12 @@ function sanitizePet(pet, base) {
     if (Number.isFinite(src[k])) out[k] = src[k];           // 负数合法（左侧/上方副屏坐标）
   }
   return out;
+}
+
+function sanitizeDataDir(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && v.trim()) return v;
+  return undefined; // 非法值 → init 时忽略（保持默认）
 }
 
 function write() {
@@ -37,10 +44,11 @@ function write() {
 
 function init(userDataDir) {
   configPath = path.join(userDataDir, 'config.json');
-  config = { privacyMode: 'mask', pet: { ...DEFAULT_PET } };
+  config = { ...DEFAULTS, pet: { ...DEFAULT_PET } };
   try {
     const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     if (saved.privacyMode === 'mask' || saved.privacyMode === 'skip') config.privacyMode = saved.privacyMode;
+    if (sanitizeDataDir(saved.dataDir) !== undefined) config.dataDir = sanitizeDataDir(saved.dataDir);
     config.pet = sanitizePet(saved.pet);
   } catch {
     // 文件不存在或损坏都回退默认
@@ -70,4 +78,20 @@ function setPet(patch) {
   write();
 }
 
-module.exports = { init, getMode, setMode, getPet, setPet, PET_EMOJIS };
+function getDataDir() {
+  return config.dataDir;
+}
+
+// dir 为 null/空串 = 恢复默认；非字符串忽略本次写入
+function setDataDir(dir) {
+  if (dir === null || dir === '') {
+    config.dataDir = null;
+    write();
+    return;
+  }
+  if (typeof dir !== 'string') return;
+  config.dataDir = dir;
+  write();
+}
+
+module.exports = { init, getMode, setMode, getPet, setPet, getDataDir, setDataDir, PET_EMOJIS };
