@@ -1,15 +1,17 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const {
   app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, screen,
-  protocol, net,
+  protocol, net, dialog,
 } = require('electron');
 const { openStore } = require('./store');
 const { ClipboardWatcher } = require('./watcher');
 const { registerIpc } = require('./ipc');
 const { looksLikeSecret } = require('./secretDetector');
 const privacyConfig = require('./privacyConfig');
+const { resolveDataPaths, probeWritable } = require('./storagePath');
 const { createPalette } = require('./palette');
 const { createPet, buildClipPayload } = require('./pet');
 const { createQrWin } = require('./qrwin');
@@ -28,6 +30,7 @@ let win = null;
 let tray = null;
 let trayPetItem = null;
 let store = null;
+let dataPaths = null;
 let watcher = null;
 let palette = null;
 let pet = null;
@@ -89,6 +92,35 @@ function createTray() {
         app.setLoginItemSettings({ openAtLogin: item.checked });
       },
     },
+    { type: 'separator' },
+    { label: `存储位置：${dataPaths ? dataPaths.effectiveDir : ''}`, enabled: false },
+    {
+      label: '更改存储位置…',
+      click: async () => {
+        const res = await dialog.showOpenDialog({
+          title: '选择剪贴板数据存储目录',
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        if (res.canceled || !res.filePaths[0]) return;
+        const probe = probeWritable(res.filePaths[0]);
+        if (!probe.ok) {
+          dialog.showErrorBox('无法使用该目录', probe.error || '目录不可写，请换一个有写入权限的目录');
+          return;
+        }
+        privacyConfig.setDataDir(res.filePaths[0]);
+        app.relaunch();
+        app.exit(0);
+      },
+    },
+    {
+      label: '恢复默认位置',
+      click: () => {
+        privacyConfig.setDataDir(null);
+        app.relaunch();
+        app.exit(0);
+      },
+    },
+    { type: 'separator' },
     {
       id: 'pet-toggle',
       label: '桌宠',
@@ -141,10 +173,21 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
-  const dbPath = path.join(app.getPath('userData'), 'clipboard.db');
-  const imagesDir = path.join(app.getPath('userData'), 'images');
-  store = openStore(dbPath, imagesDir);
-  privacyConfig.init(app.getPath('userData'));
+  const userDataDir = app.getPath('userData');
+  privacyConfig.init(userDataDir);
+  let paths = resolveDataPaths(userDataDir, privacyConfig.getDataDir());
+  try {
+    // 自定义目录可能尚不存在（手改 config/目录被删）；先建目录再开库
+    fs.mkdirSync(paths.effectiveDir, { recursive: true });
+    store = openStore(paths.dbPath, paths.imagesDir);
+  } catch (err) {
+    // 自定义位置建库失败（只读/磁盘错误等）：回退默认路径，应用照常可用
+    console.error('自定义存储位置建库失败，回退默认路径:', err);
+    paths = resolveDataPaths(userDataDir, null);
+    store = openStore(paths.dbPath, paths.imagesDir);
+  }
+  dataPaths = paths;
+  const imagesDir = dataPaths.imagesDir;
 
   palette = createPalette({ rendererDir: path.join(__dirname, '..', 'renderer') });
 
