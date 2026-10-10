@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld('api', {
   petContextMenu: () => ipcRenderer.invoke('pet:context-menu'),
   onPetClip: (callback) => ipcRenderer.on('pet:clip', (_e, payload) => callback(payload)),
   onPetEmoji: (callback) => ipcRenderer.on('pet:emoji', (_e, emoji) => callback(emoji)),
+  qrShow: (payload) => ipcRenderer.invoke('qr:show', payload),
+  onQrRender: (callback) => ipcRenderer.on('qr:render', (_e, result) => callback(result)),
 });

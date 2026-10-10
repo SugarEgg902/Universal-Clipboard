@@ -19,8 +19,8 @@ function withSecret(row) {
 
 const withMeta = (row) => withSecret(withThumb(row));
 
-// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked }
-function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked }) {
+// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked, qrWin }
+function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked, qrWin }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
   // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
   // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
@@ -145,6 +145,13 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
         },
       },
     ]).popup();
+  });
+
+  // ---- 扫码快传 ----
+
+  ipcMain.handle('qr:show', (_event, payload) => {
+    if (qrWin) return qrWin.show(payload);
+    return null;
   });
 }
 

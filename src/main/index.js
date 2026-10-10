@@ -12,6 +12,7 @@ const { looksLikeSecret } = require('./secretDetector');
 const privacyConfig = require('./privacyConfig');
 const { createPalette } = require('./palette');
 const { createPet, buildClipPayload } = require('./pet');
+const { createQrWin } = require('./qrwin');
 const paster = require('./paster');
 
 // 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
@@ -30,6 +31,7 @@ let store = null;
 let watcher = null;
 let palette = null;
 let pet = null;
+let qrWin = null;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -152,6 +154,8 @@ app.whenReady().then(() => {
     onMoved: (x, y) => privacyConfig.setPet({ x, y }),
   });
 
+  qrWin = createQrWin({ rendererDir: path.join(__dirname, '..', 'renderer'), store, imagesDir });
+
   protocol.handle('clipimg', async (request) => {
     try {
       const url = new URL(request.url);
@@ -179,6 +183,7 @@ app.whenReady().then(() => {
     showPalette: () => palette.show(),
     privacyConfig,
     setTrayPetChecked: (checked) => { if (trayPetItem) trayPetItem.checked = checked; },
+    qrWin,
   });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
