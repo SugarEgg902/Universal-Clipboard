@@ -616,6 +616,8 @@ git commit -m "feat: 二维码弹窗渲染层——vendor qrcode 画码、双路
 
 ## Task 4: 主窗口入口（条目/当天/多选）+ 冒烟 + README
 
+> **执行期修订（冒烟发现的真 bug，commit e4c9b8e）**：Task 3 retina 修订引入潜伏缺陷——vendor qrcode 的 toCanvas 会给 canvas 写内联 `style.width=480px`，覆写 qr.css 的 240px，导致 480 CSS px 画布溢出 320×380 窗口（定位图形被裁、疑似不可扫、提示与按钮挤出窗外）。修复：`#qr-canvas { width:240px !important; height:240px !important; }`（位图保持 480 保 retina）。PIL 像素测量前后对比验证。另实现期合理偏离：📱 按钮也挂在图片行（计划锚点只写了文本行，但计划要求图片行支持）；.item-qr 沿用 .item-pin 的 visibility:hover 惯例而非计划的常显 opacity；#check-bar/#qr-day 用 CSS 变量适配暗色；#check-bar[hidden] 需 ID 选择器压 UA 规则（同 #pin-overlay[hidden] 先例）。冒烟备注：osascript 坐标点击被辅助功能权限拦截，改真实 qrwin/qrserver/store 临时 harness + 真实 DB 验证三形态字节级一致；真实 app 内点击验证留待用户手动。计数不变（96/96）。
+
 **Files:**
 - Modify: `src/renderer/index.html`（sidebar 加当天 QR 按钮 + 多选操作条容器）
 - Modify: `src/renderer/app.js`（itemRow QR 按钮、多选、当天打包）
