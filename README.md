@@ -1,5 +1,7 @@
 # 剪贴板抽屉柜 (Clipboard Drawer)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 跨平台（macOS / Windows / Linux）剪贴板历史工具。以"抽屉柜"形式展示剪贴板历史：左侧为最近 7 个日期的抽屉，点击抽屉右侧展示当天复制的所有文本。
 
 ## 界面一览
@@ -73,3 +75,7 @@ npm run dist       # 完整安装包（mac: dmg / win: nsis / linux: AppImage）
 - Linux: `~/.config/clipboard-drawer/`
 
 其中：`clipboard.db` 为剪贴板历史（SQLite），`images/` 为图片存档，`config.json` 为隐私模式等配置。
+
+## 协议
+
+[MIT License](LICENSE)
