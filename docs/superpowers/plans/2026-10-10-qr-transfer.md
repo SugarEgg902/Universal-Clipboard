@@ -787,6 +787,8 @@ git commit -m "feat: 扫码快传入口——条目/当天/多选生成二维码
 
 ## 自检记录
 
+- **执行期修订（质量审查修复，commit eef6ccf）**：① check-qr/check-cancel 的 renderItems(state.items) 会抹掉片段视图的 .search-group 组头（state.items 是扁平数组）——改 clearChecks() helper 精准清 checkbox，不再整体重绘；② refreshAfterMutation 改为 await selectSnippets()/selectDay()（否则修剪跑到旧 list 上失效）并修剪 checked；③ onWindowShown 重置多选（与其他 UI 状态一致）；④ qr-day 空态文案竞态（label 一次性捕获）；⑤ 📱 按钮抽 qrButton helper——注意：审查者称文本分支守卫"永真"是错的，pin/QR 调用点对 secret 行同样执行，守卫必须保留（简化为 !item.secret）；⑥ Esc 优先清多选。计数不变（96/96）。
+
 - Spec 覆盖：双路判定(§3.2→T1)、HTTP 服务与 token/超时/端口(§3.1→T1)、qrwin 窗口与生命周期(§3.3→T2)、隐私与 secret 排除(§3.4→T1 resolveContent + T2/T4)、弹窗渲染(§4.2→T3)、入口三件套(§4.1→T4)、错误处理表(§5→T1 错误码 + T3 ERROR_HINTS + T4 空列表提示)、测试策略(§6→T1 单测 + T4 冒烟)。
 - 无占位符：所有代码步骤含完整实现。
 - 类型一致：payload `{kind:'text'|'image', id}` / `{kind:'bundle', ids}` 在 qrwin/resolveContent/preload qrShow/app.js 调用一致；result `{mode:'inline',data}` / `{mode:'url',url}` / `{mode:'error',code}` 在 qrwin 生产、qr:render 透传、qr.js 消费一致；错误码 no-network/not-found/empty/no-port 在 qrserver 抛、ERROR_HINTS 消费一致。
