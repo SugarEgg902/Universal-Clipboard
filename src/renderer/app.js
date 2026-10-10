@@ -151,17 +151,7 @@ if (IS_PALETTE) {
       thumb.addEventListener('error', () => thumb.replaceWith(imageLabel(item)));
       thumb.addEventListener('click', () => window.api.copyClip(item.id));
       row.append(time, thumb);
-      if (!(item.type === 'text' && item.secret)) {
-        const qr = document.createElement('button');
-        qr.className = 'item-qr';
-        qr.textContent = '📱';
-        qr.title = '生成二维码传到手机';
-        qr.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.api.qrShow({ kind: item.type === 'image' ? 'image' : 'text', id: item.id });
-        });
-        row.append(qr);
-      }
+      row.append(qrButton(item));
     } else {
       const preview = document.createElement('span');
       preview.className = 'item-text';
@@ -245,17 +235,7 @@ if (IS_PALETTE) {
       });
       row.append(pin);
 
-      if (!(item.type === 'text' && item.secret)) {
-        const qr = document.createElement('button');
-        qr.className = 'item-qr';
-        qr.textContent = '📱';
-        qr.title = '生成二维码传到手机';
-        qr.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.api.qrShow({ kind: item.type === 'image' ? 'image' : 'text', id: item.id });
-        });
-        row.append(qr);
-      }
+      if (!item.secret) row.append(qrButton(item));
 
       if (item.pinned && item.trigger_word) {
         const badge = document.createElement('span');
@@ -298,6 +278,19 @@ if (IS_PALETTE) {
     label.textContent = `🖼 图片 · ${item.width}×${item.height}`;
     label.addEventListener('click', () => window.api.copyClip(item.id));
     return label;
+  }
+
+  // 条目 QR 按钮：文本行（非密码）与图片行都挂；点击唤起二维码弹窗
+  function qrButton(item) {
+    const qr = document.createElement('button');
+    qr.className = 'item-qr';
+    qr.textContent = '📱';
+    qr.title = '生成二维码传到手机';
+    qr.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.api.qrShow({ kind: item.type === 'image' ? 'image' : 'text', id: item.id });
+    });
+    return qr;
   }
 
   // ---- Pin 表单弹层 ----
@@ -365,15 +358,16 @@ if (IS_PALETTE) {
   async function refreshAfterMutation() {
     if (state.selected === SNIPPETS_KEY && !state.keyword) {
       await refreshDays();
-      selectSnippets();
-      return;
-    }
-    if (state.keyword) {
+      await selectSnippets();
+    } else if (state.keyword) {
       await Promise.all([doSearch(), refreshDays()]);
     } else if (state.selected) {
       await refreshDays();
-      selectDay(state.selected);
+      await selectDay(state.selected);
     }
+    // 删除/清空后修剪多选：已消失的 id 不再残留计数
+    state.checked = new Set([...state.checked].filter((id) => state.items.some((it) => it.id === id)));
+    if (typeof updateCheckBar === 'function') updateCheckBar();
   }
 
   async function doSearch() {
@@ -418,28 +412,32 @@ if (IS_PALETTE) {
     checkCount.textContent = `已选 ${state.checked.size} 条`;
   }
 
-  document.getElementById('check-qr').addEventListener('click', () => {
-    window.api.qrShow({ kind: 'bundle', ids: [...state.checked] });
+  // 清空多选：同步清掉所有复选框的勾（不重绘列表——重绘会抹掉片段视图的组头）
+  function clearChecks() {
     state.checked.clear();
     updateCheckBar();
-    renderItems(state.items); // 重绘去勾
+    itemsEl.querySelectorAll('.item-check').forEach((cb) => { cb.checked = false; });
+  }
+
+  document.getElementById('check-qr').addEventListener('click', () => {
+    const ids = [...state.checked];
+    window.api.qrShow({ kind: 'bundle', ids });
+    clearChecks();
   });
 
   document.getElementById('check-cancel').addEventListener('click', () => {
-    state.checked.clear();
-    updateCheckBar();
-    renderItems(state.items);
+    clearChecks();
   });
 
+  const qrDayLabel = document.getElementById('qr-day').textContent;
   document.getElementById('qr-day').addEventListener('click', () => {
     const ids = state.items
       .filter((it) => it.type === 'text' && !it.secret)
       .map((it) => it.id);
     if (!ids.length) {
       const btn = document.getElementById('qr-day');
-      const old = btn.textContent;
       btn.textContent = '无可传送文本';
-      setTimeout(() => { btn.textContent = old; }, 1500);
+      setTimeout(() => { btn.textContent = qrDayLabel; }, 1500);
       return;
     }
     window.api.qrShow({ kind: 'bundle', ids });
@@ -488,6 +486,10 @@ if (IS_PALETTE) {
     }
 
     if (e.key === 'Escape') {
+      if (state.checked.size > 0) {
+        clearChecks(); // 有选择时 Esc 只清多选，不清搜索不藏窗
+        return;
+      }
       if (document.activeElement === searchEl && searchEl.value) {
         e.preventDefault();
         clearSearch();
@@ -532,6 +534,8 @@ if (IS_PALETTE) {
     clearTimeout(searchTimer);
     searchEl.value = '';
     state.keyword = '';
+    state.checked.clear(); // 多选与其他 UI 状态一致随窗重置（列表随后重绘为无勾）
+    if (typeof updateCheckBar === 'function') updateCheckBar();
     refreshDays().then(() => {
       if (state.days.length) selectDay(state.days[0].dateKey);
     });
