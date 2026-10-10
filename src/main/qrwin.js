@@ -31,6 +31,7 @@ function createQrWin({ rendererDir, store, imagesDir }) {
       frame: false,
       resizable: false,
       skipTaskbar: true,
+      acceptFirstMouse: true, // showInactive 弹窗首次点击直接触发按钮（macOS）
       webPreferences: {
         preload: path.join(rendererDir, '..', 'preload.js'),
         contextIsolation: true,

@@ -1,3 +1,9 @@
+/*
+ * QRCode.js — vendored from qrcode@1.5.4 (https://github.com/soldair/node-qrcode)
+ * Copyright (c) 2012 Ryan Day. MIT License.
+ * Build: esbuild node_modules/qrcode/lib/browser.js --bundle --platform=browser --format=iife --global-name=QRCode
+ * （1.5.4 的 npm tarball 不再附 build/qrcode.js，故自行打包；与官方 UMD 等效）
+ */
 var QRCode = (() => {
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __commonJS = (cb, mod) => function __require() {

@@ -1,5 +1,6 @@
 // 二维码弹窗渲染层：收到 qr:render 结果后画码/提示。
 const canvas = document.getElementById('qr-canvas');
+const box = document.getElementById('qr-box');
 const hint = document.getElementById('qr-hint');
 const urlEl = document.getElementById('qr-url');
 const copyBtn = document.getElementById('qr-copy');
@@ -12,8 +13,9 @@ const ERROR_HINTS = {
 };
 
 function drawQr(text) {
-  // vendor 的 UMD 全局 QRCode
-  QRCode.toCanvas(canvas, text, { width: 240, margin: 1 }, (err) => {
+  box.hidden = false;
+  // vendor 的 UMD 全局 QRCode；位图 480px 供 retina，CSS 仍按 240px 布局
+  QRCode.toCanvas(canvas, text, { width: 480, margin: 4 }, (err) => {
     if (err) hint.textContent = '二维码生成失败，请重试';
   });
 }
@@ -40,6 +42,7 @@ window.api.onQrRender((result) => {
       }
     };
   } else {
+    box.hidden = true; // 错误态清掉旧码，避免残留可扫的过期二维码
     hint.textContent = ERROR_HINTS[result.code] || '生成失败，请重试';
   }
 });
