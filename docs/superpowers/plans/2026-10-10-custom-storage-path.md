@@ -344,3 +344,7 @@ git commit -m "feat: 自定义存储位置——托盘切换/恢复、启动解�
 - 无占位符：所有代码步骤含完整实现。
 - 类型一致：resolveDataPaths 返回 { dbPath, imagesDir, effectiveDir } 在 T1 定义、T2 消费；probeWritable 返回 { ok, error? }；getDataDir 返回 string|null。
 - 测试计数：基线 96 → T1 后 105（9 条新测试）→ T2 不增（渲染层惯例 + 接线无新单测，冒烟覆盖）。
+
+## 执行期修订
+
+- **T1 质量审查修复（531a3f2 之后）**：计划原文 `dataDir.replace(/[\\/]+$/,'')` 会把根路径剥坏（`D:\`→盘相对、`/`→CWD），实现者按"剥离结果为空或等于 root 去尾形式则不剥"修复，并新增根路径/空白串归一测试，测试计数相应上调（以修复后 `npm test` 实际计数为准）。
