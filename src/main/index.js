@@ -97,10 +97,17 @@ function createTray() {
     {
       label: '更改存储位置…',
       click: async () => {
-        const res = await dialog.showOpenDialog({
-          title: '选择剪贴板数据存储目录',
-          properties: ['openDirectory', 'createDirectory'],
-        });
+        let res;
+        try {
+          // Linux 无 zenity/kdialog 时 showOpenDialog 会 reject；兜住避免主进程 unhandled rejection
+          res = await dialog.showOpenDialog({
+            title: '选择剪贴板数据存储目录',
+            properties: ['openDirectory', 'createDirectory'],
+          });
+        } catch (err) {
+          dialog.showErrorBox('无法打开选择对话框', err.message || '系统目录选择对话框不可用');
+          return;
+        }
         if (res.canceled || !res.filePaths[0]) return;
         const probe = probeWritable(res.filePaths[0]);
         if (!probe.ok) {

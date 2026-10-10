@@ -81,7 +81,7 @@ npm run dist       # 完整安装包（mac: dmg / win: nsis / linux: AppImage）
 
 其中：`clipboard.db` 为剪贴板历史（SQLite），`images/` 为图片存档，`config.json` 为隐私模式等配置。
 
-自定义存储位置：托盘菜单「更改存储位置…」可把数据目录换到任意位置（如另一块磁盘）；切换后新位置从零开始记录（该目录已有 clipboard.db 则沿用），旧数据原地保留不动；「恢复默认位置」切回。
+自定义存储位置：托盘菜单「更改存储位置…」可把数据目录换到任意位置（如另一块磁盘）；切换后新位置从零开始记录（该目录已有 clipboard.db 则沿用），旧数据原地保留不动；「恢复默认位置」切回。config.json 永远留在默认 userData 目录，只有 clipboard.db 和 images/ 移到所选位置。
 
 ## 协议
 
