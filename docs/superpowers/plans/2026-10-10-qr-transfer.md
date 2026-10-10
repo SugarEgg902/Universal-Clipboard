@@ -340,6 +340,8 @@ git commit -m "feat: 扫码快传服务端——双路判定、内容解析、�
 
 ## Task 2: QR 弹窗主进程（qrwin）+ IPC + preload + 接线
 
+> **执行期修订（质量审查修复，commit e4a752e）**：show() 非重入竞态——session 在 `await startServer` 后才赋值，两次快速 qr:show 交错会产生孤儿局域网服务（继续服务到 10 分钟超时）与错序刷旧码。修复为请求序号守卫（模块级 reqSeq，await 后 mySeq !== reqSeq 则停新服务直接返回）；另补 did-fail-load 日志兜底、send 闭包捕获窗口句柄（对齐 pet.js 防御风格）。记录在案未修：加载期多次 show 堆叠 once 监听（守卫已消除错序，last-wins 不影响最终态）。计数不变（96/96）。
+
 **Files:**
 - Create: `src/main/qrwin.js`
 - Modify: `src/main/ipc.js`
