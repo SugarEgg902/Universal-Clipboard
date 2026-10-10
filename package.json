@@ -2,7 +2,6 @@
   "name": "clipboard-drawer",
   "version": "0.1.0",
   "description": "剪贴板抽屉柜：按日期展示剪贴板历史",
-  "private": true,
   "main": "src/main/index.js",
   "scripts": {
     "start": "electron .",
@@ -19,7 +18,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
-    "pinyin-pro": "^3.29.4"
+    "pinyin-pro": "^3.29.4",
+    "qrcode": "^1.5.4"
   },
   "build": {
     "appId": "com.clipboarddrawer.app",

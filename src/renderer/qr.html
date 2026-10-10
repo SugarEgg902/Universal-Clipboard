@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>扫码快传</title>
+  <link rel="stylesheet" href="qr.css">
+</head>
+<body>
+  <div id="app">
+    <div id="qr-box"><canvas id="qr-canvas" width="240" height="240"></canvas></div>
+    <div id="qr-hint">加载中…</div>
+    <div id="qr-url" hidden></div>
+    <div id="qr-actions">
+      <button id="qr-copy" hidden>复制链接</button>
+      <button id="qr-close">关闭</button>
+    </div>
+  </div>
+  <script src="vendor/qrcode.js"></script>
+  <script src="qr.js"></script>
+</body>
+</html>
