@@ -401,6 +401,9 @@ if (IS_PALETTE) {
     await window.api.clearDay(state.selected);
     await refreshDays();
     selectDay(state.selected);
+    // 清空当天后多选一并失效，立即重置操作条（绕过了 refreshAfterMutation 的修剪）
+    state.checked.clear();
+    updateCheckBar();
   });
 
   // ---- 扫码快传：多选操作条与当天打包 ----
