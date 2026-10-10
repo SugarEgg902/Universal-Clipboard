@@ -482,6 +482,8 @@ git commit -m "feat: 二维码弹窗主进程——窗口生命周期、双路�
 
 ## Task 3: QR 弹窗渲染层（vendor qrcode + qr.html/js/css）
 
+> **执行期修订（质量审查修复，commit 9b5125e）**：① 错误态残留旧二维码（窗口复用，inline/url→error 时 canvas 未清，旧码仍可扫）——#qr-box 显隐控制；② 实现期偏离已确认合理：qrcode@1.5.4 的 npm tarball 不再附 build/qrcode.js（计划中 cp 步骤不可行），改为 esbuild 打包 lib/browser.js 为 IIFE（全局 QRCode，无 eval，CSP 合规），vendor 文件头加 MIT 署名注释；③ retina 清晰度和 QR 规范安静区——toCanvas 改 `{width:480, margin:4}`（位图 480，CSS 仍 240）；④ qrwin 加 `acceptFirstMouse: true`（macOS 弹窗首击只聚焦的默认行为修复）。记录在案未修：删 private 是有意为打包、qrcode 留 dependencies、"已复制"计时器残留。计数不变（96/96）。
+
 **Files:**
 - Create: `src/renderer/vendor/qrcode.js`（vendor，自 node_modules 复制）
 - Create: `src/renderer/qr.html`
