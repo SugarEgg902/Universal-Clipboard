@@ -154,6 +154,21 @@ test('setDataDir：空串与 null 归一为 null（恢复默认）', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('setDataDir：空白字符串归一为 null；带空白的路径 trim 后写入', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
+  privacyConfig.init(dir);
+  privacyConfig.setDataDir('/x');
+  privacyConfig.setDataDir('   ');
+  assert.strictEqual(privacyConfig.getDataDir(), null);
+  let saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(saved.dataDir, null);
+  privacyConfig.setDataDir('  /ok  ');
+  assert.strictEqual(privacyConfig.getDataDir(), '/ok');
+  saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(saved.dataDir, '/ok');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('setDataDir：非字符串忽略；与 setPet/setMode 互不覆盖', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cut-privacy-'));
   privacyConfig.init(dir);

@@ -82,8 +82,9 @@ function getDataDir() {
   return config.dataDir;
 }
 
-// dir 为 null/空串 = 恢复默认；非字符串忽略本次写入
+// dir 为 null/空串/空白串 = 恢复默认；非字符串忽略本次写入；写入前 trim 归一
 function setDataDir(dir) {
+  if (typeof dir === 'string') dir = dir.trim();
   if (dir === null || dir === '') {
     config.dataDir = null;
     write();

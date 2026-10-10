@@ -24,6 +24,23 @@ test('resolveDataPaths：相对路径 resolve 成绝对', () => {
   assert.ok(path.isAbsolute(p.effectiveDir));
 });
 
+test('resolveDataPaths：Windows 盘根 D:\\ 不被剥成盘相对路径（win32 语义，跨平台注入验证）', () => {
+  const p = resolveDataPaths('C:\\ud', 'D:\\', path.win32);
+  assert.strictEqual(p.effectiveDir, 'D:\\');
+  assert.strictEqual(p.dbPath, 'D:\\clipboard.db');
+  assert.strictEqual(p.imagesDir, 'D:\\images');
+  // 斜杠形式的盘根同样保留
+  const p2 = resolveDataPaths('C:\\ud', 'D:/', path.win32);
+  assert.strictEqual(p2.effectiveDir, 'D:\\');
+});
+
+test('resolveDataPaths：POSIX 根 / 不被剥成空串（不落 CWD）', () => {
+  const p = resolveDataPaths('/ud', '/', path.posix);
+  assert.strictEqual(p.effectiveDir, path.posix.parse('/').root); // '/'
+  assert.strictEqual(p.dbPath, '/clipboard.db');
+  assert.strictEqual(p.imagesDir, '/images');
+});
+
 test('probeWritable：正常目录可写（自动创建）', () => {
   const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sp-')), 'sub', 'data');
   const r = probeWritable(dir);

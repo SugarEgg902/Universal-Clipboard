@@ -4,18 +4,24 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-function resolveDataPaths(userDataDir, dataDir) {
+function resolveDataPaths(userDataDir, dataDir, pathMod = path) {
   if (typeof dataDir === 'string' && dataDir.trim()) {
-    const abs = path.resolve(dataDir.replace(/[\\/]+$/, ''));
+    // 剥尾部分隔符；但根路径（'/'、'D:\'）剥完会退化（'' → CWD、'D:' → 盘相对 CWD），此时保留原值
+    const root = pathMod.parse(dataDir).root;
+    let stripped = dataDir.replace(/[\\/]+$/, '');
+    if (stripped === '' || (root && stripped === root.replace(/[\\/]+$/, ''))) {
+      stripped = dataDir;
+    }
+    const abs = pathMod.resolve(stripped);
     return {
-      dbPath: path.join(abs, 'clipboard.db'),
-      imagesDir: path.join(abs, 'images'),
+      dbPath: pathMod.join(abs, 'clipboard.db'),
+      imagesDir: pathMod.join(abs, 'images'),
       effectiveDir: abs,
     };
   }
   return {
-    dbPath: path.join(userDataDir, 'clipboard.db'),
-    imagesDir: path.join(userDataDir, 'images'),
+    dbPath: pathMod.join(userDataDir, 'clipboard.db'),
+    imagesDir: pathMod.join(userDataDir, 'images'),
     effectiveDir: userDataDir,
   };
 }
