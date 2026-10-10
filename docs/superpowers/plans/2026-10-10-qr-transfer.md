@@ -787,6 +787,8 @@ git commit -m "feat: 扫码快传入口——条目/当天/多选生成二维码
 
 ## 自检记录
 
+- **执行期修订（终审，commit 见 git）**：Minor 1——sidebar 按钮「当天二维码」实际作用于当前视图（搜索/片段视图下打包对应列表），与「清空当天」的守卫语义不一致；改标签为「打包成二维码」+ title 说明，语义与行为对齐（app.js 的 qrDayLabel 从 DOM 捕获，自动适配）。Minor 2-4 为已接受的 spec 偏离（不改代码）：bundle 短内容（≤1000 字节）实际走 inline（spec 写"恒走局域网"，inline 离线可用且更优）；服务绑定具体内网 IP 而非 0.0.0.0（更安全，IP 变更场景服务失效可接受）；not-found 提示用通用「内容已不存在」覆盖图片场景。
+
 - **执行期修订（质量审查修复，commit eef6ccf）**：① check-qr/check-cancel 的 renderItems(state.items) 会抹掉片段视图的 .search-group 组头（state.items 是扁平数组）——改 clearChecks() helper 精准清 checkbox，不再整体重绘；② refreshAfterMutation 改为 await selectSnippets()/selectDay()（否则修剪跑到旧 list 上失效）并修剪 checked；③ onWindowShown 重置多选（与其他 UI 状态一致）；④ qr-day 空态文案竞态（label 一次性捕获）；⑤ 📱 按钮抽 qrButton helper——注意：审查者称文本分支守卫"永真"是错的，pin/QR 调用点对 secret 行同样执行，守卫必须保留（简化为 !item.secret）；⑥ Esc 优先清多选。计数不变（96/96）。
 
 - Spec 覆盖：双路判定(§3.2→T1)、HTTP 服务与 token/超时/端口(§3.1→T1)、qrwin 窗口与生命周期(§3.3→T2)、隐私与 secret 排除(§3.4→T1 resolveContent + T2/T4)、弹窗渲染(§4.2→T3)、入口三件套(§4.1→T4)、错误处理表(§5→T1 错误码 + T3 ERROR_HINTS + T4 空列表提示)、测试策略(§6→T1 单测 + T4 冒烟)。
