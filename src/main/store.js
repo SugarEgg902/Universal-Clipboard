@@ -93,8 +93,9 @@ class ClipStore {
     this.insertRemoteImageStmt = this.db.prepare(
       "INSERT INTO clips (text, created_at, type, image_path, width, height, source, origin_device_id, origin_id, host_seq) VALUES ('', ?, 'image', ?, ?, ?, 'remote', ?, ?, ?)"
     );
+    // 仅标记尚无 origin 的行：防止误调把远端行的 origin 改写成本机导致回推回声
     this.markOriginStmt = this.db.prepare(
-      'UPDATE clips SET origin_device_id = ?, origin_id = id WHERE id = ?'
+      'UPDATE clips SET origin_device_id = ?, origin_id = id WHERE id = ? AND origin_device_id IS NULL'
     );
     this.markSyncedStmt = this.db.prepare('UPDATE clips SET host_seq = ? WHERE id = ?');
     this.listUnsyncedStmt = this.db.prepare(

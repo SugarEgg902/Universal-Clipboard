@@ -104,3 +104,41 @@ test('旧库迁移：无新列的既有 db 打开后自动补列且旧数据可�
   assert.strictEqual(row.text, '旧数据');
   assert.deepStrictEqual(store.listUnsynced('dev-x'), []); // 旧行无 origin，不进待传队列
 });
+
+test('insertRemoteText：空串与全空白文本 → null', () => {
+  const store = makeStore();
+  assert.strictEqual(store.insertRemoteText({ text: '', originDeviceId: 'dev-b', originId: 1 }), null);
+  assert.strictEqual(store.insertRemoteText({ text: '   \n\t ', originDeviceId: 'dev-b', originId: 2 }), null);
+  assert.strictEqual(store.countByDay(new Date().toISOString().slice(0, 10)), 0);
+});
+
+test('markSynced / markOrigin：不存在的 id 静默 no-op 不抛错', () => {
+  const store = makeStore();
+  assert.doesNotThrow(() => store.markOrigin(9999, 'dev-self'));
+  assert.doesNotThrow(() => store.markSynced(9999, 100));
+  assert.deepStrictEqual(store.listUnsynced('dev-self'), []);
+});
+
+test('listSince：limit 截断后可按最后一行 id 续页', () => {
+  const store = makeStore();
+  for (let i = 1; i <= 5; i++) {
+    store.insertRemoteText({ text: 't' + i, originDeviceId: 'b', originId: i, hostSeq: i });
+  }
+  const page1 = store.listSince(0, 2);
+  assert.strictEqual(page1.length, 2);
+  assert.strictEqual(page1[0].text, 't1');
+  assert.strictEqual(page1[1].text, 't2');
+  const page2 = store.listSince(page1[page1.length - 1].id, 10);
+  assert.strictEqual(page2.length, 3);
+  assert.strictEqual(page2[0].text, 't3');
+  assert.strictEqual(page2[2].text, 't5');
+});
+
+test('唯一索引兜底：绕过 byOrigin 直接 INSERT 重复 origin 行抛约束错误', () => {
+  const store = makeStore();
+  const stmt = store.db.prepare(
+    "INSERT INTO clips (text, created_at, source, origin_device_id, origin_id) VALUES ('x', 1, 'remote', 'dev-x', 99)"
+  );
+  stmt.run();
+  assert.throws(() => stmt.run(), /UNIQUE constraint failed/);
+});
