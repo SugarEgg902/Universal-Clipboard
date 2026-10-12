@@ -21,4 +21,5 @@ contextBridge.exposeInMainWorld('api', {
   onPetEmoji: (callback) => ipcRenderer.on('pet:emoji', (_e, emoji) => callback(emoji)),
   qrShow: (payload) => ipcRenderer.invoke('qr:show', payload),
   onQrRender: (callback) => ipcRenderer.on('qr:render', (_e, result) => callback(result)),
+  syncConnect: (cfg) => ipcRenderer.invoke('sync-connect', cfg),
 });

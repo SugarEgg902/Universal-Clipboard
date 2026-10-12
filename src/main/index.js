@@ -15,6 +15,9 @@ const { resolveDataPaths, probeWritable } = require('./storagePath');
 const { createPalette } = require('./palette');
 const { createPet, buildClipPayload } = require('./pet');
 const { createQrWin } = require('./qrwin');
+const { startSyncServer } = require('./syncserver');
+const { startSyncClient } = require('./syncclient');
+const { lanIp } = require('./qrserver');
 const paster = require('./paster');
 
 // 缩略图自定义协议：clipimg://thumb/<id>，仅允许返回 images 目录内的图片文件
@@ -35,6 +38,10 @@ let watcher = null;
 let palette = null;
 let pet = null;
 let qrWin = null;
+let syncHandle = null;
+let syncStatus = 'off'; // off | connecting | connected | disconnected | error
+let syncTrayStatusItem = null;
+let syncConnWin = null;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -73,6 +80,127 @@ function showWindow() {
   win.show();
   win.focus();
   win.webContents.send('window-shown');
+}
+
+function updateSyncTrayStatus() {
+  if (!syncTrayStatusItem) return;
+  const label = {
+    off: '共享剪贴板：未开启',
+    connecting: '共享剪贴板：连接中…',
+    connected: '共享剪贴板：已连接',
+    disconnected: '共享剪贴板：已断开，重连中…',
+    error: '共享剪贴板：连接失败（请检查配对）',
+  }[syncStatus];
+  syncTrayStatusItem.label = label;
+}
+
+function stopSync() {
+  if (syncHandle) {
+    const h = syncHandle;
+    syncHandle = null;
+    h.stop().catch(() => { /* 停止失败不阻塞 */ });
+  }
+  syncStatus = 'off';
+  updateSyncTrayStatus();
+}
+
+function startSync() {
+  stopSync();
+  const s = privacyConfig.getSync();
+  if (s.role === 'host' && s.token) {
+    try {
+      const ip = lanIp();
+      startSyncServer({
+        store, imagesDir: dataPaths.imagesDir, token: s.token, deviceId: s.deviceId, ip,
+      }).then((srv) => {
+        syncHandle = srv;
+        syncStatus = 'connected';
+        updateSyncTrayStatus();
+        if (s.hostPort !== srv.port || s.hostIp !== ip) {
+          privacyConfig.setSync({ hostIp: ip, hostPort: srv.port });
+        }
+      }).catch((err) => {
+        console.error('共享服务启动失败:', err);
+        syncStatus = 'error';
+        updateSyncTrayStatus();
+      });
+    } catch (err) {
+      console.error('共享服务启动失败（无局域网 IP？）:', err);
+      syncStatus = 'error';
+      updateSyncTrayStatus();
+    }
+  } else if (s.role === 'client' && s.hostIp && s.hostPort && s.token) {
+    syncStatus = 'connecting';
+    updateSyncTrayStatus();
+    // setLastSeq 节流：连续补拉时 1s 防抖写盘，stop 时 flush（崩溃丢 lastSeq 有 origin 幂等重放兜底）
+    let seqTimer = null;
+    let pendingSeq = null;
+    const flushSeq = () => {
+      if (seqTimer) { clearTimeout(seqTimer); seqTimer = null; }
+      if (pendingSeq != null) { privacyConfig.setSync({ lastSeq: pendingSeq }); pendingSeq = null; }
+    };
+    const client = startSyncClient({
+      store, imagesDir: dataPaths.imagesDir, token: s.token, deviceId: s.deviceId,
+      hostIp: s.hostIp, hostPort: s.hostPort,
+      getLastSeq: () => privacyConfig.getSync().lastSeq,
+      setLastSeq: (n) => { pendingSeq = n; if (!seqTimer) seqTimer = setTimeout(flushSeq, 1000); },
+      onStatus: (st) => { syncStatus = st; updateSyncTrayStatus(); },
+    });
+    const origStop = client.stop.bind(client);
+    syncHandle = {
+      pushLocal: client.pushLocal,
+      stop: async () => { flushSeq(); await origStop(); },
+    };
+  }
+}
+
+// 托盘菜单的共享剪贴板分区：按角色返回不同条目（无角色 = 入口两项）
+function syncSection() {
+  const s = privacyConfig.getSync();
+  if (s.role === 'host') {
+    const addr = (syncHandle && syncHandle.port)
+      ? `${privacyConfig.getSync().hostIp}:${syncHandle.port}` : '启动中…';
+    return [
+      { label: `共享主机：${addr}`, enabled: false },
+      { label: '复制配对码', click: () => clipboard.writeText(privacyConfig.getSync().token || '') },
+      { label: '重新生成配对码', click: () => {
+          privacyConfig.setSync({ token: crypto.randomBytes(16).toString('hex') });
+          startSync();
+          createTray();
+        } },
+      { label: '关闭共享服务', click: () => { privacyConfig.setSync({ role: null }); stopSync(); createTray(); } },
+    ];
+  }
+  if (s.role === 'client') {
+    return [
+      { label: '共享剪贴板', id: 'sync-status', enabled: false },
+      { label: '断开连接', click: () => { privacyConfig.setSync({ role: null }); stopSync(); createTray(); } },
+    ];
+  }
+  return [
+    { label: '开启共享主机…', click: () => {
+        privacyConfig.setSync({ role: 'host', token: crypto.randomBytes(16).toString('hex') });
+        startSync();
+        createTray();
+      } },
+    { label: '连接共享主机…', click: () => openSyncConnWin() },
+  ];
+}
+
+// 连接共享主机小窗（仿 qrwin 小窗模式：单例、closed 置 null）
+function openSyncConnWin() {
+  if (syncConnWin) { syncConnWin.focus(); return; }
+  syncConnWin = new BrowserWindow({
+    width: 340, height: 260, resizable: false, maximizable: false, minimizable: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  syncConnWin.loadFile(path.join(__dirname, '..', 'renderer', 'syncconn.html'));
+  syncConnWin.on('closed', () => { syncConnWin = null; });
 }
 
 function createTray() {
@@ -128,6 +256,7 @@ function createTray() {
       },
     },
     { type: 'separator' },
+    ...syncSection(),
     {
       id: 'pet-toggle',
       label: '桌宠',
@@ -173,6 +302,9 @@ function createTray() {
   ]);
   // 菜单常驻（非每次 popup 重建），存引用供桌宠右键"禁用桌宠"同步勾选态
   trayPetItem = menu.getMenuItemById('pet-toggle');
+  // client 角色的共享状态项同样常驻引用，连接状态变化时原地改 label
+  syncTrayStatusItem = menu.getMenuItemById('sync-status');
+  updateSyncTrayStatus();
   tray.setContextMenu(menu);
   if (process.platform !== 'darwin') {
     tray.on('click', showWindow);
@@ -195,6 +327,7 @@ app.whenReady().then(() => {
   }
   dataPaths = paths;
   const imagesDir = dataPaths.imagesDir;
+  startSync(); // 按 config 的 sync.role 恢复共享主机/客户端（默认 off 时为空操作）
 
   palette = createPalette({ rendererDir: path.join(__dirname, '..', 'renderer') });
 
@@ -234,6 +367,13 @@ app.whenReady().then(() => {
     privacyConfig,
     setTrayPetChecked: (checked) => { if (trayPetItem) trayPetItem.checked = checked; },
     qrWin,
+    // 连接窗口校验通过后：写配置（切 client 角色）→ 起同步 → 重建托盘菜单
+    onSyncConnect: (cfg) => {
+      privacyConfig.setSync({ role: 'client', hostIp: cfg.hostIp, hostPort: cfg.hostPort, token: cfg.token });
+      startSync();
+      createTray();
+      return { ok: true };
+    },
   });
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -265,6 +405,10 @@ app.whenReady().then(() => {
           return;
         }
         const id = store.insert(text);
+        if (id != null) {
+          store.markOrigin(id, privacyConfig.getSync().deviceId);
+          if (syncHandle) syncHandle.pushLocal(id);
+        }
         if (id != null && pet) {
           pet.notifyClip(buildClipPayload({ kind: 'text', text: trimmed, secret }));
         }
@@ -275,6 +419,10 @@ app.whenReady().then(() => {
     onImage: (img) => {
       try {
         const id = store.insertImage(img.buffer, img.width, img.height);
+        if (id != null) {
+          store.markOrigin(id, privacyConfig.getSync().deviceId);
+          if (syncHandle) syncHandle.pushLocal(id);
+        }
         if (id != null && pet) {
           pet.notifyClip(buildClipPayload({ kind: 'image', width: img.width, height: img.height }));
         }
@@ -312,4 +460,5 @@ app.on('window-all-closed', (event) => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (watcher) watcher.stop();
+  stopSync();
 });

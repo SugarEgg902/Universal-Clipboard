@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>连接共享主机</title>
+  <style>
+    body { font: 14px system-ui; margin: 0; padding: 16px; background: #fff; color: #222; }
+    label { display: block; margin: 8px 0 4px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
+    button { margin-top: 12px; padding: 6px 16px; border: none; border-radius: 6px; background: #4a7dff; color: #fff; cursor: pointer; }
+    #err { color: #d33; margin-top: 8px; min-height: 1em; }
+  </style>
+</head>
+<body>
+  <label>主机 IP:端口（主机托盘「共享主机：…」可见）</label>
+  <input id="addr" placeholder="192.168.1.5:43789">
+  <label>配对码（主机托盘「复制配对码」可得）</label>
+  <input id="token" placeholder="配对码">
+  <button id="go">连接</button>
+  <div id="err"></div>
+  <script src="syncconn.js"></script>
+</body>
+</html>

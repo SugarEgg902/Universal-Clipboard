@@ -19,8 +19,8 @@ function withSecret(row) {
 
 const withMeta = (row) => withSecret(withThumb(row));
 
-// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked, qrWin }
-function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked, qrWin }) {
+// 注册所有 IPC handler。deps: { store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked, qrWin, onSyncConnect }
+function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hideApp, pet, showWindow, showPalette, privacyConfig, setTrayPetChecked, qrWin, onSyncConnect }) {
   // 最近 7 天抽屉元数据：[{ dateKey, label, count }]
   // 注意：todayKey 从 getLast7Days()[0] 统一取得再传给 formatLabel，
   // 避免两个调用各自读取 Date.now() 跨午夜时标签不一致。
@@ -152,6 +152,27 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
   ipcMain.handle('qr:show', (_event, payload) => {
     if (qrWin) return qrWin.show(payload);
     return null;
+  });
+
+  // ---- 局域网共享剪贴板 ----
+
+  // 连接共享主机：先 health 校验（3s 超时），成功才交给 onSyncConnect 写配置并启动同步
+  ipcMain.handle('sync-connect', async (_e, cfg) => {
+    const c = cfg && typeof cfg === 'object' ? cfg : {};
+    if (typeof c.hostIp !== 'string' || !Number.isInteger(c.hostPort) || typeof c.token !== 'string' || !c.token) {
+      return { ok: false, error: '参数不完整' };
+    }
+    try {
+      const res = await fetch(`http://${c.hostIp}:${c.hostPort}/health`, {
+        headers: { Authorization: `Bearer ${c.token}` },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) return { ok: false, error: '配对码错误或主机不可达' };
+    } catch {
+      return { ok: false, error: '主机不可达（IP/端口/网络）' };
+    }
+    if (!onSyncConnect) return { ok: false, error: '当前版本不支持' };
+    return onSyncConnect({ hostIp: c.hostIp.trim(), hostPort: c.hostPort, token: c.token.trim() });
   });
 }
 
