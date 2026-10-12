@@ -231,10 +231,10 @@ function startSyncClient(opts) {
         if (health.status === 401 || health.status === 403) throw Object.assign(new Error('unauthorized'), { fatal: true });
         if (!health.ok) throw new Error(`health ${health.status}`);
         await pullSince(); // 断线补拉（翻页）
+        applyBroken = false; // 断点已追平：SSE 链重置，此后入链事件恢复正常落库
         await flushUnsynced();
         const sse = await openSse(); // 先订阅：此之后的广播不再漏
         await pullSince(); // 后快照：追平「首拉→订阅」窗口内的插入（幂等键+唯一索引，重放安全）
-        applyBroken = false; // 补拉追平成功：SSE 链重置，后续事件恢复正常落库
         status('connected');
         retryMs = RETRY_MIN_MS;
         await sse.waitClosed; // 挂起至长连断开
