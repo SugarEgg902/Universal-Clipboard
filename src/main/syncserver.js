@@ -165,13 +165,14 @@ function startSyncServer(opts) {
 
       const imgMatch = pathname.match(/^\/image\/(\d+)$/);
       if (req.method === 'GET' && imgMatch) {
+        const imgDir = imagesDir || store.imagesDir; // 主机图片实际落在 store 的 imagesDir
         const row = store.get(Number(imgMatch[1]));
-        if (!row || row.type !== 'image' || !row.image_path || !imagesDir) {
+        if (!row || row.type !== 'image' || !row.image_path || !imgDir) {
           res.statusCode = 404;
           res.end();
           return;
         }
-        const imagePath = path.join(imagesDir, path.basename(row.image_path));
+        const imagePath = path.join(imgDir, path.basename(row.image_path));
         if (!fs.existsSync(imagePath)) {
           res.statusCode = 404;
           res.end();
