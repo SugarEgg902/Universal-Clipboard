@@ -220,6 +220,8 @@ function openSyncConnWin() {
 }
 
 function createTray() {
+  // 重建前销毁旧实例：否则会留下旧托盘图标靠 GC 回收（macOS 上可见滞留/闪烁）
+  if (tray) { tray.destroy(); tray = null; }
   const iconPath = path.join(__dirname, '..', '..', 'assets', 'trayTemplate.png');
   const icon = nativeImage.createFromPath(iconPath);
   if (icon.isEmpty()) console.error('托盘图标加载失败: ' + iconPath);
