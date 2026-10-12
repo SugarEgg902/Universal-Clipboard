@@ -163,6 +163,48 @@ test('POST /clip-image + GET /image/<id>：二进制往返', async () => {
   }
 });
 
+test('POST /clip-image：X-Meta 非法 base64/坏 JSON → 400', async () => {
+  const { store, dir } = makeStore();
+  const srv = await startSyncServer({ store, imagesDir: path.join(dir, 'images'), token: TOKEN, ip: '127.0.0.1', portRange: [46000, 46050] });
+  try {
+    const buf = Buffer.from('png-bytes');
+    const bad1 = await req(srv.port, 'POST', '/clip-image', {
+      body: buf,
+      headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': buf.length, 'X-Meta': '%%%not-base64-json%%%', Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.strictEqual(bad1.status, 400);
+    // base64 合法但 JSON 缺必填字段 → 400
+    const badMeta = Buffer.from(JSON.stringify({ originId: 1 })).toString('base64');
+    const bad2 = await req(srv.port, 'POST', '/clip-image', {
+      body: buf,
+      headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': buf.length, 'X-Meta': badMeta, Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.strictEqual(bad2.status, 400);
+    const day = new Date().toISOString().slice(0, 10);
+    assert.strictEqual(store.countByDay(day), 0);
+  } finally {
+    srv.stop();
+  }
+});
+
+test('SSE 连接数上限：第 17 个 /events 连接 → 503', async () => {
+  const { store } = makeStore();
+  const srv = await startSyncServer({ store, imagesDir: null, token: TOKEN, deviceId: 'dev-host', ip: '127.0.0.1', portRange: [46000, 46050] });
+  const conns = [];
+  try {
+    for (let i = 0; i < 16; i++) {
+      const c = http.get({ host: '127.0.0.1', port: srv.port, path: '/events', agent: false, headers: { Authorization: `Bearer ${TOKEN}` } }, () => {});
+      conns.push(c);
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    const res = await req(srv.port, 'GET', '/events', { headers: { Authorization: `Bearer ${TOKEN}` } });
+    assert.strictEqual(res.status, 503);
+  } finally {
+    for (const c of conns) c.destroy();
+    srv.stop();
+  }
+});
+
 test('主机本地条目 pushLocal 广播给 SSE 客户端', async () => {
   const { store } = makeStore();
   const srv = await startSyncServer({ store, imagesDir: null, token: TOKEN, deviceId: 'dev-host', ip: '127.0.0.1', portRange: [46000, 46050] });

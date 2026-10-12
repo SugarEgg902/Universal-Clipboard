@@ -109,6 +109,13 @@ function startSyncServer(opts) {
           rejectAfterDrain(req, res, err.code === 413 ? 413 : 400);
           return;
         }
+        // 必填字段校验：非法输入 400（客户端不应重试）；校验过后的 null 一律视为去重命中 → ACK
+        if (!body || typeof body.text !== 'string' || !body.text.trim()
+          || !body.originDeviceId || body.originId == null) {
+          res.statusCode = 400;
+          res.end();
+          return;
+        }
         const r = store.insertRemoteText({
           text: body.text, originDeviceId: body.originDeviceId, originId: body.originId,
         });
@@ -128,6 +135,10 @@ function startSyncServer(opts) {
         let meta;
         try {
           meta = JSON.parse(Buffer.from(String(req.headers['x-meta'] || ''), 'base64').toString('utf8'));
+          // 必填字段校验：非法输入 400；校验过后的 null 一律视为去重命中 → ACK
+          if (!meta || typeof meta !== 'object' || !meta.originDeviceId || meta.originId == null) {
+            throw new Error('bad-meta');
+          }
         } catch {
           rejectAfterDrain(req, res, 400);
           return;
