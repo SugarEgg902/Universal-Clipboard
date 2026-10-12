@@ -184,3 +184,58 @@ test('setDataDir：非字符串忽略；与 setPet/setMode 互不覆盖', () => 
   assert.strictEqual(saved.pet.emoji, '🐱');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+function makeTmpDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'pc-'));
+}
+
+test('getSync/setSync：默认与字段互不覆盖；deviceId 自动生成', () => {
+  const dir = makeTmpDir();
+  privacyConfig.init(dir);
+  const s = privacyConfig.getSync();
+  assert.strictEqual(s.role, null);
+  assert.strictEqual(s.token, null);
+  assert.strictEqual(s.lastSeq, 0);
+  assert.ok(typeof s.deviceId === 'string' && s.deviceId.length >= 16);
+  const dev = s.deviceId;
+  privacyConfig.setSync({ role: 'host', token: 'tok123', hostPort: 43789 });
+  privacyConfig.setSync({ hostIp: '192.168.1.5' });
+  const s2 = privacyConfig.getSync();
+  assert.strictEqual(s2.role, 'host');
+  assert.strictEqual(s2.token, 'tok123');
+  assert.strictEqual(s2.hostPort, 43789);
+  assert.strictEqual(s2.hostIp, '192.168.1.5');
+  assert.strictEqual(s2.deviceId, dev); // 未被覆盖
+  assert.strictEqual(privacyConfig.getMode(), 'mask'); // 隐私字段不受影响
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setSync：非法值忽略（role 白名单/port 范围/lastSeq 非负整数）', () => {
+  const dir = makeTmpDir();
+  privacyConfig.init(dir);
+  privacyConfig.setSync({ role: 'host' });
+  privacyConfig.setSync({ role: 'admin' });
+  assert.strictEqual(privacyConfig.getSync().role, 'host');
+  privacyConfig.setSync({ hostPort: 80 });
+  assert.strictEqual(privacyConfig.getSync().hostPort, null);
+  privacyConfig.setSync({ hostPort: 43789 });
+  privacyConfig.setSync({ lastSeq: -5 });
+  assert.strictEqual(privacyConfig.getSync().lastSeq, 0);
+  privacyConfig.setSync({ lastSeq: 42 });
+  assert.strictEqual(privacyConfig.getSync().lastSeq, 42);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('sync 持久化与 deviceId 重启稳定', () => {
+  const dir = makeTmpDir();
+  privacyConfig.init(dir);
+  privacyConfig.setSync({ role: 'client', token: 't', hostIp: '10.0.0.2', hostPort: 43790, lastSeq: 7 });
+  const dev = privacyConfig.getSync().deviceId;
+  privacyConfig.init(dir); // 模拟重启
+  const s = privacyConfig.getSync();
+  assert.strictEqual(s.role, 'client');
+  assert.strictEqual(s.hostIp, '10.0.0.2');
+  assert.strictEqual(s.lastSeq, 7);
+  assert.strictEqual(s.deviceId, dev);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

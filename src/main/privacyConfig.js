@@ -4,13 +4,15 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const PET_EMOJIS = ['📦', '🗃️', '🐱', '🐤'];
 const DEFAULT_PET = { enabled: true, x: null, y: null, emoji: '📦' };
 const DEFAULTS = { privacyMode: 'mask', dataDir: null };
+const DEFAULT_SYNC = { role: null, token: null, hostIp: null, hostPort: null, deviceId: null, lastSeq: 0 };
 
 let configPath = null;
-let config = { ...DEFAULTS, pet: { ...DEFAULT_PET } };
+let config = { ...DEFAULTS, pet: { ...DEFAULT_PET }, sync: { ...DEFAULT_SYNC } };
 
 function sanitizePet(pet, base) {
   const src = pet && typeof pet === 'object' ? pet : {};
@@ -31,6 +33,20 @@ function sanitizeDataDir(v) {
   return undefined; // 非法值 → init 时忽略（保持默认）
 }
 
+// sync 白名单清洗：base 提供原值（setSync 部分更新时保留未提供/非法字段）
+function sanitizeSync(sync, base) {
+  const src = sync && typeof sync === 'object' ? sync : {};
+  const out = { ...DEFAULT_SYNC, ...(base || {}) };
+  if (src.role === null || src.role === 'host' || src.role === 'client') out.role = src.role;
+  for (const k of ['token', 'hostIp']) {
+    if (typeof src[k] === 'string' && src[k].trim()) out[k] = src[k].trim();
+  }
+  if (Number.isInteger(src.hostPort) && src.hostPort >= 1024 && src.hostPort <= 65535) out.hostPort = src.hostPort;
+  if (typeof src.deviceId === 'string' && src.deviceId.trim()) out.deviceId = src.deviceId.trim();
+  if (Number.isInteger(src.lastSeq) && src.lastSeq >= 0) out.lastSeq = src.lastSeq;
+  return out;
+}
+
 function write() {
   if (!configPath) return;
   try {
@@ -44,14 +60,19 @@ function write() {
 
 function init(userDataDir) {
   configPath = path.join(userDataDir, 'config.json');
-  config = { ...DEFAULTS, pet: { ...DEFAULT_PET } };
+  config = { ...DEFAULTS, pet: { ...DEFAULT_PET }, sync: { ...DEFAULT_SYNC } };
   try {
     const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     if (saved.privacyMode === 'mask' || saved.privacyMode === 'skip') config.privacyMode = saved.privacyMode;
     if (sanitizeDataDir(saved.dataDir) !== undefined) config.dataDir = sanitizeDataDir(saved.dataDir);
     config.pet = sanitizePet(saved.pet);
+    config.sync = sanitizeSync(saved.sync);
   } catch {
     // 文件不存在或损坏都回退默认
+  }
+  if (!config.sync.deviceId) {
+    config.sync.deviceId = crypto.randomUUID();
+    write(); // 首次生成即落盘（含配置文件不存在走 catch 的情况）
   }
 }
 
@@ -95,4 +116,14 @@ function setDataDir(dir) {
   write();
 }
 
-module.exports = { init, getMode, setMode, getPet, setPet, getDataDir, setDataDir, PET_EMOJIS };
+function getSync() {
+  return { ...config.sync };
+}
+
+// patch 部分更新；非法字段忽略（sanitizeSync 白名单 + base 保留原值）
+function setSync(patch) {
+  config.sync = sanitizeSync(patch, config.sync);
+  write();
+}
+
+module.exports = { init, getMode, setMode, getPet, setPet, getDataDir, setDataDir, getSync, setSync, PET_EMOJIS };

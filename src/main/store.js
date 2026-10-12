@@ -53,7 +53,7 @@ class ClipStore {
       "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' ORDER BY created_at DESC, id DESC LIMIT 5000"
     );
     this.getStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE id = ?'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, source, origin_device_id, origin_id, host_seq FROM clips WHERE id = ?'
     );
     this.deleteStmt = this.db.prepare('DELETE FROM clips WHERE id = ?');
     this.clearDayStmt = this.db.prepare('DELETE FROM clips WHERE created_at >= ? AND created_at < ?');
@@ -83,6 +83,25 @@ class ClipStore {
     );
     this.listSnippetsStmt = this.db.prepare(
       'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE pinned = 1 ORDER BY created_at DESC, id DESC'
+    );
+    this.byOriginStmt = this.db.prepare(
+      'SELECT id FROM clips WHERE origin_device_id = ? AND origin_id = ?'
+    );
+    this.insertRemoteTextStmt = this.db.prepare(
+      "INSERT INTO clips (text, created_at, pinyin, source, origin_device_id, origin_id, host_seq) VALUES (?, ?, ?, 'remote', ?, ?, ?)"
+    );
+    this.insertRemoteImageStmt = this.db.prepare(
+      "INSERT INTO clips (text, created_at, type, image_path, width, height, source, origin_device_id, origin_id, host_seq) VALUES ('', ?, 'image', ?, ?, ?, 'remote', ?, ?, ?)"
+    );
+    this.markOriginStmt = this.db.prepare(
+      'UPDATE clips SET origin_device_id = ?, origin_id = id WHERE id = ?'
+    );
+    this.markSyncedStmt = this.db.prepare('UPDATE clips SET host_seq = ? WHERE id = ?');
+    this.listUnsyncedStmt = this.db.prepare(
+      'SELECT id FROM clips WHERE origin_device_id = ? AND host_seq IS NULL ORDER BY id'
+    );
+    this.listSinceStmt = this.db.prepare(
+      'SELECT id, text, created_at, type, image_path, width, height, origin_device_id, origin_id FROM clips WHERE id > ? ORDER BY id LIMIT ?'
     );
   }
 
@@ -115,6 +134,21 @@ class ClipStore {
       this.backfillPinyin();
     }
     this.backfillPinyin(); // 幂等补扫：修复上次回填中断遗留的 NULL 行
+    if (!cols.includes('source')) {
+      this.db.exec("ALTER TABLE clips ADD COLUMN source TEXT NOT NULL DEFAULT 'local'");
+    }
+    if (!cols.includes('origin_device_id')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN origin_device_id TEXT');
+    }
+    if (!cols.includes('origin_id')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN origin_id INTEGER');
+    }
+    if (!cols.includes('host_seq')) {
+      this.db.exec('ALTER TABLE clips ADD COLUMN host_seq INTEGER');
+    }
+    this.db.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_origin ON clips(origin_device_id, origin_id)'
+    );
   }
 
   // Me-Search 存量回填：pinyin 为 NULL 的文本行中含中文者补拼音（迁移一次性调用；测试可直接调用）
@@ -254,6 +288,64 @@ class ClipStore {
   unpin(id) {
     this.unpinStmt.run(id);
     return true;
+  }
+
+  // 远端文本入库：origin 幂等（同 device+originId 已存在→返回已有行 inserted:false）；
+  // 当天同内容去重→null。返回 { id, inserted } 或 null。
+  insertRemoteText({ text, originDeviceId, originId, hostSeq, now = Date.now() }) {
+    const trimmed = String(text).trim();
+    if (!trimmed || !originDeviceId || originId == null) return null;
+    const hit = this.byOriginStmt.get(originDeviceId, originId);
+    if (hit) return { id: hit.id, inserted: false };
+    const [start, end] = dayRange(toDateKey(now));
+    if (this.existsStmt.get(trimmed, start, end)) return null;
+    const id = this.insertRemoteTextStmt.run(
+      trimmed, now, hasCJK(trimmed) ? toPinyin(trimmed) : null, originDeviceId, originId, hostSeq ?? null
+    ).lastInsertRowid;
+    return { id, inserted: true };
+  }
+
+  // 远端图片入库：sha256 哈希命名（与 insertImage 同规则）。origin 幂等；当天同图去重→null。
+  insertRemoteImage(buffer, { width, height, originDeviceId, originId, hostSeq, now = Date.now() }) {
+    if (!this.imagesDir || !Buffer.isBuffer(buffer) || !buffer.length) return null;
+    if (!originDeviceId || originId == null) return null;
+    const hit = this.byOriginStmt.get(originDeviceId, originId);
+    if (hit) return { id: hit.id, inserted: false };
+    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+    const fileName = hash.slice(0, 16) + '.png';
+    const [start, end] = dayRange(toDateKey(now));
+    if (this.imageExistsStmt.get(fileName, start, end)) return null;
+    try {
+      const filePath = path.join(this.imagesDir, fileName);
+      if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, buffer);
+    } catch (err) {
+      console.error('远端图片写盘失败:', err);
+      return null;
+    }
+    const id = this.insertRemoteImageStmt.run(
+      now, fileName, width ?? null, height ?? null, originDeviceId, originId, hostSeq ?? null
+    ).lastInsertRowid;
+    return { id, inserted: true };
+  }
+
+  // 本机条目标记来源（origin_id = 行 id，唯一索引天然去重）
+  markOrigin(id, deviceId) {
+    this.markOriginStmt.run(deviceId, id);
+  }
+
+  // 主机已确认（host_seq = 主机行 id）；客户端上传成功后调用
+  markSynced(id, hostSeq) {
+    this.markSyncedStmt.run(hostSeq, id);
+  }
+
+  // 本机产生但主机未确认的条目（补传队列）
+  listUnsynced(deviceId) {
+    return this.listUnsyncedStmt.all(deviceId).map((r) => r.id);
+  }
+
+  // 断线补拉：id > since 的条目元数据（seq 即行 id）
+  listSince(seq, limit = 200) {
+    return this.listSinceStmt.all(seq, limit);
   }
 
   // 所有片段按分组返回：[{ name, items }]，null 组名归为"未分组"
