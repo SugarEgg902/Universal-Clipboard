@@ -1488,4 +1488,4 @@ git commit -m "feat: 局域网共享剪贴板接线——托盘 UI、连接窗�
 - **T3 实现修正（a800527）**：计划原文 3 处不自洽被实现者修复——connectSse 应挂起至 close 才 reject（立即 resolve 导致紧密重连循环 + SSE 泄漏 + 耗尽 16 上限）；Electron/undici fetch 静默忽略 agent:false，改 `Connection: close` 禁连接复用（keep-alive 死 socket 致全量跑必挂）；imagesDir 统一回退 `imagesDir || store.imagesDir`（syncserver /image 与 syncclient pushRow 两处）。
 - **T3 健壮性修复（193aeb1）**：质量审查 3 阻塞项（SSE apply 不串行致失败条目永久丢失、fetch 无超时 stop 挂死、退避不可中断拖 30s）+ 2 非阻塞（队列毒化、flushTimer 吞 fatal）修复，+2 断点重放测试。计数 139→141。
 - **T4 接线修复（91b4502）**：质量审查 3 P1——stopSync 对 host 的同步 stop 调 .catch 抛 TypeError、host server pending 回填无角色复查致泄漏、markOrigin 无条件调用破坏「只同步开启后的新内容」且涉历史/密码原文上传（改为 role 非 null 才标记，与 spec §3.4 一致）；2 P2——syncconn try/catch + 按钮防重入、host 启动失败托盘无显示。P3（复制配对码经剪贴板入历史）判定低危接受。createTray 重建不 destroy 旧 Tray（70aeee1 引入）随后补修（345ba5b）。
-- **终审修复（待提交）**：终审 2 P1——syncclient pullSince 不翻页（>500 积压永久丢失，改循环到页不满）、先快照后订阅 TOCTOU（改 SSE 200 订阅成功后二次追平）；加固：客户端对主机数据加 1MB/10MB 上限校验（防恶意主机写满磁盘），+2 测试。
+- **终审修复（511b7ec）**：终审 2 P1——syncclient pullSince 不翻页（>500 积压永久丢失，改循环到页不满）、先快照后订阅 TOCTOU（改 SSE 200 订阅成功后二次追平）；加固：客户端对主机数据加 1MB/10MB 上限校验（防恶意主机写满磁盘），+2 测试。
