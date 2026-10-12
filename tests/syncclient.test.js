@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -155,4 +156,120 @@ test('鉴权失败：错 token → onStatus 收到 error 且停止重试、不�
     client.stop();
     srv.stop();
   }
+});
+
+// 假主机：/health、/items（published 后才可见 seq1/seq2）、/image/1（imageOk 前 404）、/events
+function startFakeHost() {
+  const sseClients = new Set();
+  const png = Buffer.from('fake-png-bytes');
+  const state = { published: false, imageOk: false };
+  const items = [
+    { id: 1, text: '', created_at: Date.now(), type: 'image', image_path: 'a.png', width: 1, height: 1, origin_device_id: 'dev-host', origin_id: 11 },
+    { id: 2, text: '第二条文本', created_at: Date.now(), type: 'text', image_path: null, width: null, height: null, origin_device_id: 'dev-host', origin_id: 12 },
+  ];
+  const server = http.createServer((req, res) => {
+    if ((req.headers.authorization || '') !== `Bearer ${TOKEN}`) {
+      res.statusCode = 401;
+      res.end();
+      return;
+    }
+    const url = new URL(req.url, 'http://x');
+    if (url.pathname === '/health') {
+      res.setHeader('Content-Type', 'application/json');
+      res.end('{"ok":true}');
+      return;
+    }
+    if (url.pathname === '/items') {
+      const since = Number(url.searchParams.get('since') || 0);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ items: state.published ? items.filter((i) => i.id > since) : [] }));
+      return;
+    }
+    if (url.pathname === '/image/1') {
+      if (!state.imageOk) { res.statusCode = 404; res.end(); return; }
+      res.setHeader('Content-Type', 'image/png');
+      res.end(png);
+      return;
+    }
+    if (url.pathname === '/events') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      sseClients.add(res);
+      req.on('close', () => sseClients.delete(res));
+      return;
+    }
+    res.statusCode = 404;
+    res.end();
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      resolve({
+        port: server.address().port,
+        state,
+        png,
+        broadcast(obj) {
+          for (const res of sseClients) res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        },
+        stop() {
+          for (const res of sseClients) res.end();
+          sseClients.clear();
+          server.close();
+          if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+        },
+      });
+    });
+  });
+}
+
+test('SSE 条目失败：lastSeq 停在失败点，重连后从断点重放', async () => {
+  const host = await startFakeHost();
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-b-'));
+  const storeB = new ClipStore(':memory:', path.join(dirB, 'images'));
+  let lastSeq = 0;
+  const client = startSyncClient({
+    store: storeB, imagesDir: null, token: TOKEN, deviceId: 'dev-b',
+    hostIp: '127.0.0.1', hostPort: host.port,
+    getLastSeq: () => lastSeq, setLastSeq: (n) => { lastSeq = n; },
+    onStatus: () => {},
+  });
+  try {
+    await sleep(500); // 已连上（首拉为空：published=false）
+    host.state.published = true;
+    // 连发 seq1 图片（/image/1 仍 404，必失败）+ seq2 文本
+    host.broadcast({ seq: 1, kind: 'image', imageId: 1, originDeviceId: 'dev-host', originId: 11, width: 1, height: 1 });
+    host.broadcast({ seq: 2, kind: 'text', text: '第二条文本', originDeviceId: 'dev-host', originId: 12 });
+    await sleep(700);
+    // seq1 失败 → 链断：seq1 自身未消费（lastSeq 不到 1），seq2 也不许越过失败点推进
+    assert.strictEqual(lastSeq, 0);
+    // 主机侧图片恢复可拉：重连后 pullSince 从断点重放 seq1、seq2
+    host.state.imageOk = true;
+    await sleep(4000);
+    assert.strictEqual(lastSeq, 2);
+    const day = new Date().toISOString().slice(0, 10);
+    assert.strictEqual(storeB.listByDay(day).filter((r) => r.text === '第二条文本').length, 1);
+    const img = storeB.listByDay(day).find((r) => r.type === 'image');
+    assert.ok(img, '重放后应有图片条目');
+    assert.deepStrictEqual(fs.readFileSync(path.join(dirB, 'images', img.image_path)), host.png);
+  } finally {
+    client.stop();
+    host.stop();
+  }
+});
+
+test('stop 中断退避：连不上主机时 stop() 在 1s 内返回', async () => {
+  // 占一个端口再释放，拿到确定无人监听的端口
+  const probe = http.createServer();
+  await new Promise((r) => probe.listen(0, '127.0.0.1', r));
+  const freePort = probe.address().port;
+  probe.close();
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-b-'));
+  const storeB = new ClipStore(':memory:', path.join(dirB, 'images'));
+  const client = startSyncClient({
+    store: storeB, imagesDir: null, token: TOKEN, deviceId: 'dev-b',
+    hostIp: '127.0.0.1', hostPort: freePort,
+    getLastSeq: () => 0, setLastSeq: () => {}, onStatus: () => {},
+  });
+  await sleep(3500); // 经过 2-3 个退避周期（1s→2s→4s），此刻应停在长退避 sleep 里
+  const t0 = Date.now();
+  await client.stop();
+  assert.ok(Date.now() - t0 < 1000, `stop 耗时不应拖满退避周期，实际 ${Date.now() - t0}ms`);
 });
