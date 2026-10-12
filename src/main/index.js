@@ -41,6 +41,7 @@ let qrWin = null;
 let syncHandle = null;
 let syncStatus = 'off'; // off | connecting | connected | disconnected | error
 let syncTrayStatusItem = null;
+let syncTrayHostAddrItem = null;
 let syncConnWin = null;
 
 function createWindow() {
@@ -83,22 +84,28 @@ function showWindow() {
 }
 
 function updateSyncTrayStatus() {
-  if (!syncTrayStatusItem) return;
-  const label = {
-    off: '共享剪贴板：未开启',
-    connecting: '共享剪贴板：连接中…',
-    connected: '共享剪贴板：已连接',
-    disconnected: '共享剪贴板：已断开，重连中…',
-    error: '共享剪贴板：连接失败（请检查配对）',
-  }[syncStatus];
-  syncTrayStatusItem.label = label;
+  if (syncTrayStatusItem) {
+    const label = {
+      off: '共享剪贴板：未开启',
+      connecting: '共享剪贴板：连接中…',
+      connected: '共享剪贴板：已连接',
+      disconnected: '共享剪贴板：已断开，重连中…',
+      error: '共享剪贴板：连接失败（请检查配对）',
+    }[syncStatus];
+    syncTrayStatusItem.label = label;
+  }
+  // host 端启动失败（端口耗尽等）：地址灰显项改失败提示；正常态地址由 createTray 重建刷新
+  if (syncTrayHostAddrItem && syncStatus === 'error') {
+    syncTrayHostAddrItem.label = '共享主机：启动失败';
+  }
 }
 
 function stopSync() {
   if (syncHandle) {
     const h = syncHandle;
     syncHandle = null;
-    h.stop().catch(() => { /* 停止失败不阻塞 */ });
+    // syncserver 的 stop 是同步返回 undefined，syncclient 的是 Promise；统一包一层
+    Promise.resolve().then(() => h.stop()).catch(() => { /* 停止失败不阻塞 */ });
   }
   syncStatus = 'off';
   updateSyncTrayStatus();
@@ -113,13 +120,22 @@ function startSync() {
       startSyncServer({
         store, imagesDir: dataPaths.imagesDir, token: s.token, deviceId: s.deviceId, ip,
       }).then((srv) => {
+        // 启动是异步的：pending 期间用户可能已关共享/重生成配对码，复查避免回填过期句柄
+        const cur = privacyConfig.getSync();
+        if (cur.role !== 'host' || cur.token !== s.token) {
+          srv.stop();
+          return;
+        }
         syncHandle = srv;
         syncStatus = 'connected';
         updateSyncTrayStatus();
         if (s.hostPort !== srv.port || s.hostIp !== ip) {
           privacyConfig.setSync({ hostIp: ip, hostPort: srv.port });
         }
+        createTray(); // 刷新托盘地址显示（替换「启动中…」）
       }).catch((err) => {
+        const cur = privacyConfig.getSync();
+        if (cur.role !== 'host' || cur.token !== s.token) return; // 已被更新的 startSync 接管
         console.error('共享服务启动失败:', err);
         syncStatus = 'error';
         updateSyncTrayStatus();
@@ -161,7 +177,7 @@ function syncSection() {
     const addr = (syncHandle && syncHandle.port)
       ? `${privacyConfig.getSync().hostIp}:${syncHandle.port}` : '启动中…';
     return [
-      { label: `共享主机：${addr}`, enabled: false },
+      { label: `共享主机：${addr}`, id: 'sync-host-addr', enabled: false },
       { label: '复制配对码', click: () => clipboard.writeText(privacyConfig.getSync().token || '') },
       { label: '重新生成配对码', click: () => {
           privacyConfig.setSync({ token: crypto.randomBytes(16).toString('hex') });
@@ -304,6 +320,8 @@ function createTray() {
   trayPetItem = menu.getMenuItemById('pet-toggle');
   // client 角色的共享状态项同样常驻引用，连接状态变化时原地改 label
   syncTrayStatusItem = menu.getMenuItemById('sync-status');
+  // host 角色的地址灰显项：启动失败时原地改 label（正常地址靠 createTray 重建刷新）
+  syncTrayHostAddrItem = menu.getMenuItemById('sync-host-addr');
   updateSyncTrayStatus();
   tray.setContextMenu(menu);
   if (process.platform !== 'darwin') {
@@ -406,8 +424,12 @@ app.whenReady().then(() => {
         }
         const id = store.insert(text);
         if (id != null) {
-          store.markOrigin(id, privacyConfig.getSync().deviceId);
-          if (syncHandle) syncHandle.pushLocal(id);
+          // 仅同步开启后才标记来源：否则 client 首连会把本机全部历史（含疑似密码原文）补传上传
+          const syncCfg = privacyConfig.getSync();
+          if (syncCfg.role) {
+            store.markOrigin(id, syncCfg.deviceId);
+            if (syncHandle) syncHandle.pushLocal(id);
+          }
         }
         if (id != null && pet) {
           pet.notifyClip(buildClipPayload({ kind: 'text', text: trimmed, secret }));
@@ -420,8 +442,12 @@ app.whenReady().then(() => {
       try {
         const id = store.insertImage(img.buffer, img.width, img.height);
         if (id != null) {
-          store.markOrigin(id, privacyConfig.getSync().deviceId);
-          if (syncHandle) syncHandle.pushLocal(id);
+          // 同 onClip：仅同步开启后才标记来源
+          const syncCfg = privacyConfig.getSync();
+          if (syncCfg.role) {
+            store.markOrigin(id, syncCfg.deviceId);
+            if (syncHandle) syncHandle.pushLocal(id);
+          }
         }
         if (id != null && pet) {
           pet.notifyClip(buildClipPayload({ kind: 'image', width: img.width, height: img.height }));
