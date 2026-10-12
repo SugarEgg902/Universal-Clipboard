@@ -6,6 +6,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { TEXT_MAX_BYTES, IMAGE_MAX_BYTES } = require('./syncserver');
 
 const RETRY_MIN_MS = 1000;
 const RETRY_MAX_MS = 30000;
@@ -109,7 +110,8 @@ function startSyncClient(opts) {
     }
   }
 
-  // 远端条目落库并推进 lastSeq；回声/历史条目只推进 lastSeq
+  // 远端条目落库并推进 lastSeq；回声/历史条目只推进 lastSeq；
+  // 超限条目（恶意/失控主机防护）只消费不插入，防写满磁盘
   async function applyItem(item) {
     if (item.origin_device_id === deviceId) { setLastSeq(item.id); return; } // 回声
     if (!item.origin_device_id) { setLastSeq(item.id); return; } // 同步开启前的历史
@@ -117,12 +119,22 @@ function startSyncClient(opts) {
       const res = await req(`${base}/image/${item.id}`, { agent: false, headers });
       if (!res.ok) throw new Error(`fetch image ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > IMAGE_MAX_BYTES) {
+        console.error(`同步图片超限（${buf.length}B > ${IMAGE_MAX_BYTES}B），跳过 seq=${item.id}`);
+        setLastSeq(item.id);
+        return;
+      }
       store.insertRemoteImage(buf, {
         width: item.width, height: item.height,
         originDeviceId: item.origin_device_id, originId: item.origin_id, hostSeq: item.id,
       });
       setLastSeq(item.id);
     } else {
+      if (Buffer.byteLength(String(item.text ?? ''), 'utf8') > TEXT_MAX_BYTES) {
+        console.error(`同步文本超限（>${TEXT_MAX_BYTES}B），跳过 seq=${item.id}`);
+        setLastSeq(item.id);
+        return;
+      }
       store.insertRemoteText({
         text: item.text, originDeviceId: item.origin_device_id, originId: item.origin_id, hostSeq: item.id,
       });
@@ -145,19 +157,36 @@ function startSyncClient(opts) {
     });
   }
 
+  // 断线补拉：按 since 游标循环翻页直到空页（服务端可能每页返回少于 limit，
+  // 不能用「不满一页即停」判断）；游标不前进（服务端不按游标响应）时兜底跳出防死循环
   async function pullSince() {
-    const res = await req(`${base}/items?since=${getLastSeq()}&limit=500`, { agent: false, headers });
-    if (res.status === 401 || res.status === 403) throw Object.assign(new Error('unauthorized'), { fatal: true });
-    if (!res.ok) throw new Error(`pull ${res.status}`);
-    const { items } = await res.json();
-    for (const item of items) {
-      if (stopped) return;
-      await applyItem(item);
+    let since = getLastSeq();
+    for (;;) {
+      const res = await req(`${base}/items?since=${since}&limit=500`, { agent: false, headers });
+      if (res.status === 401 || res.status === 403) throw Object.assign(new Error('unauthorized'), { fatal: true });
+      if (!res.ok) throw new Error(`pull ${res.status}`);
+      const { items } = await res.json();
+      if (!items.length) break;
+      for (const item of items) {
+        if (stopped) return;
+        await applyItem(item);
+      }
+      const lastId = items[items.length - 1].id;
+      if (lastId <= since) break;
+      since = lastId;
     }
   }
 
-  function connectSse() {
+  // 建立 SSE：收到 200（服务端已把本连接加进广播听众）即 resolve { waitClosed }；
+  // waitClosed 挂起至长连断开才 reject——调用方据此拆出「先订阅、后快照、再挂起」三步，
+  // 消除「先快照后订阅」窗口内主机插入行的 TOCTOU 丢失
+  function openSse() {
     return new Promise((resolve, reject) => {
+      let rejectClosed;
+      const waitClosed = new Promise((_, rej) => { rejectClosed = rej; });
+      // 追平 pullSince 抛错时调用方不再 await waitClosed，预挂 catch 防 unhandledRejection
+      // （正常路径 cycle 仍 await，拒绝照常传播）
+      waitClosed.catch(() => { /* 见上 */ });
       const conn = http.get({ host: hostIp, port: hostPort, path: '/events', agent: false, headers }, (res) => {
         if (res.statusCode !== 200) {
           res.resume();
@@ -186,8 +215,8 @@ function startSyncClient(opts) {
             }
           }
         });
-        res.on('close', () => { esRes = null; reject(new Error('sse-closed')); });
-        // 不 resolve：promise 挂起至长连断开（close→reject），调用方 await 即「挂到断线」
+        res.on('close', () => { esRes = null; rejectClosed(new Error('sse-closed')); });
+        resolve({ waitClosed }); // 已订阅：此后的广播不会漏
       });
       esReq = conn; // stop 时 destroy，解决建连期挂死
       conn.on('error', (err) => { if (esReq === conn) esReq = null; reject(err); });
@@ -201,12 +230,14 @@ function startSyncClient(opts) {
         const health = await req(`${base}/health`, { agent: false, headers });
         if (health.status === 401 || health.status === 403) throw Object.assign(new Error('unauthorized'), { fatal: true });
         if (!health.ok) throw new Error(`health ${health.status}`);
-        await pullSince();
-        applyBroken = false; // 重连补拉成功：SSE 链重置，后续事件恢复正常落库
+        await pullSince(); // 断线补拉（翻页）
         await flushUnsynced();
+        const sse = await openSse(); // 先订阅：此之后的广播不再漏
+        await pullSince(); // 后快照：追平「首拉→订阅」窗口内的插入（幂等键+唯一索引，重放安全）
+        applyBroken = false; // 补拉追平成功：SSE 链重置，后续事件恢复正常落库
         status('connected');
         retryMs = RETRY_MIN_MS;
-        await connectSse(); // 长连，断开则抛错进下一轮
+        await sse.waitClosed; // 挂起至长连断开
       } catch (err) {
         if (stopped) return;
         if (esRes) { try { esRes.destroy(); } catch { /* 已断 */ } esRes = null; }

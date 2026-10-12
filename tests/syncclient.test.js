@@ -193,6 +193,7 @@ function startFakeHost() {
     }
     if (url.pathname === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      res.write('retry: 3000\n\n'); // 对齐真实主机：立即冲刷响应头（否则客户端 response 事件不触发）
       sseClients.add(res);
       req.on('close', () => sseClients.delete(res));
       return;
@@ -272,4 +273,112 @@ test('stop 中断退避：连不上主机时 stop() 在 1s 内返回', async () 
   const t0 = Date.now();
   await client.stop();
   assert.ok(Date.now() - t0 < 1000, `stop 耗时不应拖满退避周期，实际 ${Date.now() - t0}ms`);
+});
+
+// 精简假主机：/health、/items（pageSize 分页）、/events（onEvents 钩子在 200 后触发）
+function startStubHost({ items = [], pageSize = Infinity, onEvents = null } = {}) {
+  const sseClients = new Set();
+  const state = { items: items.slice() };
+  const server = http.createServer((req, res) => {
+    if ((req.headers.authorization || '') !== `Bearer ${TOKEN}`) {
+      res.statusCode = 401;
+      res.end();
+      return;
+    }
+    const url = new URL(req.url, 'http://x');
+    if (url.pathname === '/health') {
+      res.setHeader('Content-Type', 'application/json');
+      res.end('{"ok":true}');
+      return;
+    }
+    if (url.pathname === '/items') {
+      const since = Number(url.searchParams.get('since') || 0);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ items: state.items.filter((i) => i.id > since).slice(0, pageSize) }));
+      return;
+    }
+    if (url.pathname === '/events') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      res.write('retry: 3000\n\n'); // 对齐真实主机：立即冲刷响应头（否则客户端 response 事件不触发）
+      sseClients.add(res);
+      req.on('close', () => sseClients.delete(res));
+      if (onEvents) onEvents(state); // 200 已发出（客户端已在听众集合）后触发
+      return;
+    }
+    res.statusCode = 404;
+    res.end();
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      resolve({
+        port: server.address().port,
+        state,
+        stop() {
+          for (const r of sseClients) r.end();
+          sseClients.clear();
+          server.close();
+          if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+        },
+      });
+    });
+  });
+}
+
+function textItem(id, text, originId) {
+  return { id, text, created_at: Date.now(), type: 'text', image_path: null, width: null, height: null, origin_device_id: 'dev-host', origin_id: originId };
+}
+
+test('断线补拉翻页：服务端每页不满 limit 时仍按游标连续拉完全部历史', async () => {
+  const items = [1, 2, 3, 4, 5].map((i) => textItem(i, `翻页条目${i}`, 100 + i));
+  // 假主机每页固定返回 2 条（无视客户端 limit=500）：3 页 2+2+1，之后空页结束
+  const host = await startStubHost({ items, pageSize: 2 });
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-b-'));
+  const storeB = new ClipStore(':memory:', path.join(dirB, 'images'));
+  let lastSeq = 0;
+  const client = startSyncClient({
+    store: storeB, imagesDir: null, token: TOKEN, deviceId: 'dev-b',
+    hostIp: '127.0.0.1', hostPort: host.port,
+    getLastSeq: () => lastSeq, setLastSeq: (n) => { lastSeq = n; },
+    onStatus: () => {},
+  });
+  try {
+    await sleep(1000);
+    assert.strictEqual(lastSeq, 5); // 5 条全部消费
+    const day = new Date().toISOString().slice(0, 10);
+    for (let i = 1; i <= 5; i++) {
+      assert.ok(storeB.listByDay(day).some((r) => r.text === `翻页条目${i}`), `缺翻页条目${i}`);
+    }
+  } finally {
+    client.stop();
+    host.stop();
+  }
+});
+
+test('先订阅后快照：订阅窗口内主机插入（未广播）的行由追平补到', async () => {
+  const host = await startStubHost({
+    items: [],
+    onEvents: (state) => {
+      // /events 200 已发出后插入一行但不广播——模拟「首拉之后、订阅生效之前」的插入；
+      // 无追平（先快照后订阅）则此行要等下次重连才可能补上，这里直接断言追平生效
+      if (!state.items.length) state.items.push(textItem(1, '订阅窗口插入的文本', 21));
+    },
+  });
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-b-'));
+  const storeB = new ClipStore(':memory:', path.join(dirB, 'images'));
+  let lastSeq = 0;
+  const client = startSyncClient({
+    store: storeB, imagesDir: null, token: TOKEN, deviceId: 'dev-b',
+    hostIp: '127.0.0.1', hostPort: host.port,
+    getLastSeq: () => lastSeq, setLastSeq: (n) => { lastSeq = n; },
+    onStatus: () => {},
+  });
+  try {
+    await sleep(1200);
+    const day = new Date().toISOString().slice(0, 10);
+    assert.ok(storeB.listByDay(day).some((r) => r.text === '订阅窗口插入的文本'));
+    assert.strictEqual(lastSeq, 1);
+  } finally {
+    client.stop();
+    host.stop();
+  }
 });
