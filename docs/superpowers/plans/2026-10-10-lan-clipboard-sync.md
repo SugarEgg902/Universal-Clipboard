@@ -1486,3 +1486,4 @@ git commit -m "feat: 局域网共享剪贴板接线——托盘 UI、连接窗�
 - **T2 契约与修正（9a6261e/20e18c1）**：质量审查 3 条契约写入派单——去重仍回 ACK（seq=当天已存在行 id，不回 null）、origin 可 null 原样传出、handler 异常兜底。实现者修正计划原文两处违约：/clip-image 去重 ACK（计划原文回 seq:null 会致无限重传）、findExisting 限当天范围。store.js 追加 findTextIdToday/findImageIdToday 只读方法。新增「内容去重仍回 ACK」测试 + X-Meta 400/SSE 503 测试。计数 124→132→134。
 - **T3 修订**：新增「null-origin 历史行消费 seq 不插入」测试（5 条而非计划 4 条）；400 视为 fatal（数据非法重试无意义）。计数预期 134→139。
 - **T3 实现修正（a800527）**：计划原文 3 处不自洽被实现者修复——connectSse 应挂起至 close 才 reject（立即 resolve 导致紧密重连循环 + SSE 泄漏 + 耗尽 16 上限）；Electron/undici fetch 静默忽略 agent:false，改 `Connection: close` 禁连接复用（keep-alive 死 socket 致全量跑必挂）；imagesDir 统一回退 `imagesDir || store.imagesDir`（syncserver /image 与 syncclient pushRow 两处）。
+- **T3 健壮性修复（193aeb1）**：质量审查 3 阻塞项（SSE apply 不串行致失败条目永久丢失、fetch 无超时 stop 挂死、退避不可中断拖 30s）+ 2 非阻塞（队列毒化、flushTimer 吞 fatal）修复，+2 断点重放测试。计数 139→141。
