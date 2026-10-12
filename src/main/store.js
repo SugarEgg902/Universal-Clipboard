@@ -349,6 +349,26 @@ class ClipStore {
     return this.listSinceStmt.all(seq, limit);
   }
 
+  // 同步 ACK 用：内容去重命中（insertRemoteText 返回 null）时查当天已存在行 id，
+  // 客户端凭此 seq 清补传队列，避免无限重传
+  findTextIdToday(text, now = Date.now()) {
+    const trimmed = String(text).trim();
+    if (!trimmed) return null;
+    const [start, end] = dayRange(toDateKey(now));
+    const row = this.existsStmt.get(trimmed, start, end);
+    return row ? row.id : null;
+  }
+
+  // 同上，图片版：按 sha256 文件名查当天已存在行 id
+  findImageIdToday(buffer, now = Date.now()) {
+    if (!Buffer.isBuffer(buffer) || !buffer.length) return null;
+    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+    const fileName = hash.slice(0, 16) + '.png';
+    const [start, end] = dayRange(toDateKey(now));
+    const row = this.imageExistsStmt.get(fileName, start, end);
+    return row ? row.id : null;
+  }
+
   // 所有片段按分组返回：[{ name, items }]，null 组名归为"未分组"
   // 组序 = 各组最新条目出现的先后（SQL 全局倒序后按组收敛）；组内 created_at 倒序，毫秒并列按 id 倒序
   listSnippets() {
