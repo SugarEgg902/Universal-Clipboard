@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-跨平台（macOS / Windows / Linux）剪贴板历史工具。以"抽屉柜"形式展示剪贴板历史：左侧为最近 7 个日期的抽屉，点击抽屉右侧展示当天复制的所有文本。
+跨平台（macOS / Windows / Linux）剪贴板历史工具。以"抽屉柜"形式展示剪贴板历史：左侧为最近 7 个日期的抽屉，点击抽屉右侧展示当天复制的所有内容（文本与图片）。支持局域网多机实时共享剪贴板。
 
 ## 界面一览
 
@@ -73,6 +73,8 @@ npm start          # 启动应用
 npm run pack       # 免安装目录（dist/）
 npm run dist       # 完整安装包（mac: dmg / win: nsis / linux: AppImage）
 ```
+
+跨平台构建（如在本机打出 Linux 包）：`npx electron-builder --linux`（或 `--win` / `--mac`）。注意原生模块与 Electron 版本按本机架构/平台编译——在 Apple Silicon Mac 上打出的 Linux 包是 arm64，目标机器为 x86_64 时需用 x64 机器或 CI（见 `.github/workflows/release.yml`）构建。
 
 ## 数据位置
 
