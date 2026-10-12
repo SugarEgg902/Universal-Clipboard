@@ -43,12 +43,12 @@
 - 鉴权：所有端点校验 `Authorization: Bearer <token>`，不匹配 401（health 端点也要求 token）
 - 路由：
   - `GET /health` → `{ ok, deviceId, version }`
-  - `POST /clip`（JSON）→ 文本条目：`{ text, is_secret, originDeviceId, originId, ts }`；Content-Length ≤ 1MB，超限 413
-  - `POST /clip-image`（octet-stream，头 `X-Meta: JSON{is_secret, originDeviceId, originId, ext}`）→ 图片 ≤ 10MB，超限 413；文件名由主机生成（自增 id + ext），**不接受客户端路径**
+  - `POST /clip`（JSON）→ 文本条目：`{ text, originDeviceId, originId }`；Content-Length ≤ 1MB，超限 413
+  - `POST /clip-image`（octet-stream，头 `X-Meta: base64(JSON){originDeviceId, originId, width, height, ext}`）→ 图片 ≤ 10MB，超限 413；文件名由主机生成（sha256 哈希命名，与 store 现有图片逻辑一致），**不接受客户端路径**
   - `GET /image/<id>` → 图片二进制（供客户端按需拉取）
-  - `GET /items?since=<seq>&limit=200` → 断线补拉：seq 大于 since 的条目（元数据）
-  - `GET /events`（SSE）→ 实时推送：每条 `data: { seq, kind: 'text'|'image', text?, imageId?, is_secret, originDeviceId, originId, day }`；心跳注释 `:ping` 每 25s
-- **seq**：主机维护单调递增序号（启动时从 db 现有条目数/最大 seq 恢复），每条入库内容分配 seq 并持久记录
+  - `GET /items?since=<seq>&limit=200` → 断线补拉：id 大于 since 的条目（元数据）
+  - `GET /events`（SSE）→ 实时推送：每条 `data: { seq, kind: 'text'|'image', text?, imageId?, originDeviceId, originId, width?, height? }`；心跳注释 `:ping` 每 25s
+- **seq 就是 clips.id**：主机行 id 自增天然单调，重启后无需恢复逻辑，`GET /items?since=<id>` 直接 `WHERE id > since` 补拉
 - **幂等去重**：db 对 `(originDeviceId, originId)` 建唯一索引；重复 POST 返回已有条目（200 + 同 seq），不重复入库
 - 广播：入库并提交后向所有 SSE 连接写事件；**100ms 防抖合并**连续多条；主机自己 watcher 产生的内容同样走「入库→广播」路径
 - 连接管理：req close 清理、进程退出 closeAllConnections；SSE 连接数上限（如 16），超限拒绝
@@ -67,7 +67,7 @@
 
 ### 3.5 隐私
 
-- is_secret 由**产生端**计算并随内容传输，主机与各客户端直接信任该标记按本端 privacyMode 打码（配对设备即信任模型）
+- **is_secret 不上线**：v3 打标是读取时无状态计算的（ipc.js 每读一次用 looksLikeSecret 判定），各端算法一致，收到内容后本地自行判定打码，协议无需传输该字段
 - 本端「完全不记录」模式：watcher 跳过的不入库也不上传
 - 错误响应不回显文件路径/token
 
