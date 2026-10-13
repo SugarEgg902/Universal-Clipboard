@@ -74,7 +74,9 @@ npm run pack       # 免安装目录（dist/）
 npm run dist       # 完整安装包（mac: dmg / win: nsis / linux: AppImage）
 ```
 
-跨平台构建（如在本机打出 Linux 包）：`npx electron-builder --linux`（或 `--win` / `--mac`）。注意原生模块与 Electron 版本按本机架构/平台编译——在 Apple Silicon Mac 上打出的 Linux 包是 arm64，目标机器为 x86_64 时需用 x64 机器或 CI（见 `.github/workflows/release.yml`）构建。
+跨平台构建（如在本机打出 Linux 包）：`npx electron-builder --linux`（或 `--win` / `--mac`）。**Linux 包务必在 Linux 环境（或 CI，见 `.github/workflows/release.yml`）构建**——macOS 交叉构建的 AppImage 有两个已知问题：chrome-sandbox 缺 setuid 导致启动即崩（`The SUID sandbox helper binary was found, but is not configured correctly`），以及原生模块（better-sqlite3）可能打包成本机架构的二进制（运行时报 `invalid ELF header`）。
+
+应用启动后常驻系统托盘（无主窗口弹出），点击托盘图标打开主界面；Linux GNOME 需要系统已启用托盘支持（AppIndicator 扩展）。
 
 ## 数据位置
 
