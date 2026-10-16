@@ -123,5 +123,19 @@ mascot.addEventListener('contextmenu', (e) => {
   window.api.petContextMenu();
 });
 
+// 透明区域点击穿透（macOS/Windows；主进程在 Linux 上为空操作）：
+// 光标悬到吉祥物上才接收鼠标，离开即穿透给下层窗口。
+// 主进程初始 ignore=true，这里的 ignoring 初值与之保持一致。
+let ignoring = true;
+function updateClickThrough(e) {
+  if (drag) return; // 拖拽全程保持接收事件，松手后的下一次移动再评估
+  const wantIgnore = !mascot.contains(e.target);
+  if (wantIgnore !== ignoring) {
+    ignoring = wantIgnore;
+    window.api.petIgnoreMouse(wantIgnore);
+  }
+}
+window.addEventListener('pointermove', updateClickThrough);
+
 setState('idle');
 scheduleAction();

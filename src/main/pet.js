@@ -6,6 +6,10 @@ const { BrowserWindow, screen } = require('electron');
 
 const WIN_W = 200;
 const WIN_H = 260;
+// 透明区域点击穿透仅用于 macOS/Windows：Linux 不支持 forward 选项
+// （ignore 后渲染层收不到移动事件，无法检测光标回到吉祥物上，会永久失去交互），
+// 且 X11 下透明窗口本就以 alpha 通道决定输入形状，透明像素天然穿透。
+const CLICK_THROUGH = process.platform === 'darwin' || process.platform === 'win32';
 
 // 气泡 payload 组装（纯函数，watcher 入库成功后调用）
 function buildClipPayload({ kind, text, width, height, secret }) {
@@ -54,6 +58,10 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
       },
     });
     petWin.setAlwaysOnTop(true, 'floating');
+    // 初始即穿透：200×260 窗口里只有 64×64 的吉祥物可交互，其余透明区域
+    // 必须把点击让给下层窗口（否则桌宠周围一圈"点击没有反应"）。
+    // 渲染层靠 forward 过来的移动事件做悬停检测，光标到吉祥物上时再关穿透。
+    if (CLICK_THROUGH) petWin.setIgnoreMouseEvents(true, { forward: true });
     // 页面加载完成后回填已持久化的形象（pet.html 硬编码默认 📦；
     // 重建窗口也走 create()，此路径同时覆盖）
     petWin.webContents.on('did-finish-load', () => {
@@ -84,7 +92,10 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
     // 贴左缘收纳是常见用法，而顶缘之上无法点击且无收纳价值。
     const nx = Math.min(Math.max(cx + dx, d.x - WIN_W + 40), d.x + d.width - 40);
     const ny = Math.min(Math.max(cy + dy, d.y), d.y + d.height - 40);
-    petWin.setPosition(nx, ny);
+    // 必须取整：真实鼠标坐标是小数，setPosition 收到小数会被 Electron 参数校验
+    // 拒绝（conversion failure）静默丢弃——渲染层 unhandledrejection 兜底不报错，
+    // 表现为"拖拽完全没反应"。
+    petWin.setPosition(Math.round(nx), Math.round(ny));
   }
 
   function persistPosition() {
@@ -97,6 +108,12 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
     if (petWin) petWin.webContents.send('pet:clip', payload);
   }
 
+  // 渲染层悬停检测后回调：ignore=true 透明区穿透，false 恢复交互（吉祥物上）。
+  // 每次 ignore 都要重传 forward:true（该选项不随调用记忆）。
+  function setIgnoreMouse(ignore) {
+    if (petWin && CLICK_THROUGH) petWin.setIgnoreMouseEvents(ignore, { forward: true });
+  }
+
   function setEmoji(emoji) {
     if (petWin) petWin.webContents.send('pet:emoji', emoji);
   }
@@ -105,7 +122,7 @@ function createPet({ rendererDir, getPetConfig, onMoved }) {
     return petWin;
   }
 
-  return { show, hide, applyDrag, persistPosition, notifyClip, setEmoji, getWindow };
+  return { show, hide, applyDrag, persistPosition, notifyClip, setEmoji, setIgnoreMouse, getWindow };
 }
 
 module.exports = { createPet, buildClipPayload };

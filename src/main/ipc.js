@@ -125,6 +125,9 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
   ipcMain.handle('pet:drag', (_event, dx, dy) => {
     if (pet) pet.applyDrag(Number(dx) || 0, Number(dy) || 0);
   });
+  ipcMain.handle('pet:ignore-mouse', (_event, ignore) => {
+    if (pet) pet.setIgnoreMouse(!!ignore);
+  });
   ipcMain.handle('pet:drag-end', () => {
     if (pet) pet.persistPosition();
   });

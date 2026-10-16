@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   petDragEnd: () => ipcRenderer.invoke('pet:drag-end'),
   petOpenMain: () => ipcRenderer.invoke('pet:open-main'),
   petContextMenu: () => ipcRenderer.invoke('pet:context-menu'),
+  petIgnoreMouse: (ignore) => ipcRenderer.invoke('pet:ignore-mouse', ignore),
   onPetClip: (callback) => ipcRenderer.on('pet:clip', (_e, payload) => callback(payload)),
   onPetEmoji: (callback) => ipcRenderer.on('pet:emoji', (_e, emoji) => callback(emoji)),
   qrShow: (payload) => ipcRenderer.invoke('qr:show', payload),
