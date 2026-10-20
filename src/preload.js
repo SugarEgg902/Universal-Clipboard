@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   search: (keyword) => ipcRenderer.invoke('clipboard:search', keyword),
   deleteClip: (id) => ipcRenderer.invoke('clipboard:delete', id),
   clearDay: (dateKey) => ipcRenderer.invoke('clipboard:clearDay', dateKey),
+  setSecret: (id, value) => ipcRenderer.invoke('clipboard:setSecret', id, value),
   copyClip: (id) => ipcRenderer.invoke('clipboard:copy', id),
   listSnippets: () => ipcRenderer.invoke('clipboard:listSnippets'),
   pinClip: (id, trigger, groupName) => ipcRenderer.invoke('clipboard:pin', id, trigger, groupName),

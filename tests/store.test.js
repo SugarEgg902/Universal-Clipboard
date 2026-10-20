@@ -210,3 +210,31 @@ test('无 imagesDir 时 insertImage 返回 null', () => {
   const s = new ClipStore();
   assert.strictEqual(s.insertImage(Buffer.from('x'), 1, 1, at(2026, 10, 8)), null);
 });
+
+test('setSecretOverride：null/1/0 三态持久化，非法值拒绝', () => {
+  const s = new ClipStore();
+  const id = s.insert('hello world', at(2026, 10, 8));
+  // 默认自动（null）
+  assert.strictEqual(s.get(id).force_secret, null);
+  // 强制打码
+  assert.strictEqual(s.setSecretOverride(id, 1), true);
+  assert.strictEqual(s.get(id).force_secret, 1);
+  // 强制明文
+  assert.strictEqual(s.setSecretOverride(id, 0), true);
+  assert.strictEqual(s.get(id).force_secret, 0);
+  // 恢复自动
+  assert.strictEqual(s.setSecretOverride(id, null), true);
+  assert.strictEqual(s.get(id).force_secret, null);
+  // 非法值抛错、不存在条目返回 false
+  assert.throws(() => s.setSecretOverride(id, 2));
+  assert.throws(() => s.setSecretOverride(id, 'yes'));
+  assert.strictEqual(s.setSecretOverride(999999, 1), false);
+});
+
+test('setSecretOverride：列表与搜索返回携带 force_secret', () => {
+  const s = new ClipStore();
+  const id = s.insert('some text here', at(2026, 10, 8));
+  s.setSecretOverride(id, 1);
+  assert.strictEqual(s.listByDay('2026-10-08')[0].force_secret, 1);
+  assert.strictEqual(s.search('some text')[0].force_secret, 1);
+});

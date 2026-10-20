@@ -10,11 +10,12 @@ function withThumb(row) {
     : { ...row, thumb: null };
 }
 
-// 读取侧判定疑似密码（不移民数据，模式切换后历史行为即刻一致）
+// 读取侧判定疑似密码：force_secret 手动标记优先（1=强制打码 0=强制明文），
+// null 回落启发式（不移民数据，模式切换后历史行为即刻一致）
 function withSecret(row) {
-  return row.type === 'text' && looksLikeSecret(row.text)
-    ? { ...row, secret: true }
-    : { ...row, secret: false };
+  const auto = row.type === 'text' && looksLikeSecret(row.text);
+  const secret = row.force_secret != null ? !!row.force_secret : auto;
+  return secret ? { ...row, secret: true } : { ...row, secret: false };
 }
 
 const withMeta = (row) => withSecret(withThumb(row));
@@ -49,6 +50,13 @@ function registerIpc({ store, getWindow, imagesDir, getPaletteWindow, paster, hi
   ipcMain.handle('clipboard:clearDay', (_event, dateKey) => {
     store.clearDay(dateKey);
     return true;
+  });
+
+  // 手动打码标记（null 恢复自动 / 1 强制打码 / 0 强制明文），非法值拒绝
+  ipcMain.handle('clipboard:setSecret', (_event, id, value) => {
+    const v = value === null ? null : value === 0 || value === 1 ? value : undefined;
+    if (v === undefined) return false;
+    return store.setSecretOverride(id, v);
   });
 
   // 复制回剪贴板并隐藏窗口（文本写文本，图片写图片）

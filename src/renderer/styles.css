@@ -180,6 +180,19 @@ body {
   font-size: 12px;
   flex-shrink: 0;
 }
+/* 手动打码开关：hover 显形；强制状态常显以提示"此条目已被手动纠正" */
+.item-secret-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  visibility: hidden;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+.item:hover .item-secret-toggle { visibility: visible; }
+.item-secret-toggle.forced { visibility: visible; opacity: 1; }
 
 /* Pin 表单弹层 */
 #pin-overlay {

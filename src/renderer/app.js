@@ -225,6 +225,23 @@ if (IS_PALETTE) {
         row.append(show);
       }
 
+      // 手动打码开关：自动判不准时一次点击永久纠正。
+      // 点击翻转当前生效状态（打码↔明文），已强制的条目再点一次恢复自动。
+      const st = document.createElement('button');
+      const forced = item.force_secret != null;
+      st.className = 'item-secret-toggle' + (forced ? ' forced' : '');
+      st.textContent = item.secret ? '🔒' : '🔓';
+      st.title = forced
+        ? (item.force_secret ? '已强制打码，点击恢复自动识别' : '已强制明文，点击恢复自动识别')
+        : (item.secret ? '自动识别为密码，点击改为强制明文' : '未识别为密码，点击标为密码（打码）');
+      st.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const next = item.force_secret == null ? (item.secret ? 0 : 1) : null;
+        await window.api.setSecret(item.id, next);
+        refreshAfterMutation();
+      });
+      row.append(st);
+
       const pin = document.createElement('button');
       pin.className = 'item-pin' + (item.pinned ? ' pinned' : '');
       pin.textContent = '📌';

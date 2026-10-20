@@ -7,8 +7,24 @@ test('典型随机密码判定为疑似密码', () => {
   assert.strictEqual(looksLikeSecret('aB3$dE7%fH2*jK9!mN'), true);
 });
 
-test('长度不足 16 不判定', () => {
-  assert.strictEqual(looksLikeSecret('Xy9#kQ2$vL8mP4'), false); // 14 字符
+test('长度不足 10 不判定', () => {
+  assert.strictEqual(looksLikeSecret('Xy9#kQ2'), false); // 7 字符
+  assert.strictEqual(looksLikeSecret('Ab1!xyz'), false);
+});
+
+test('强密码形态：≥10 位 + 四类齐全 + 密码字符集', () => {
+  assert.strictEqual(looksLikeSecret('Xy9#kQ2$vL8mP4'), true); // 原"不足 16 位不判"用例，现属强密码形态
+  assert.strictEqual(looksLikeSecret('Tr0ub4dor&3'), true);
+  assert.strictEqual(looksLikeSecret('Hello123!x'), true);
+});
+
+test('强密码规则不收录：冒号/等号更像日志与配置行', () => {
+  assert.strictEqual(looksLikeSecret('Error:404!x'), false);
+  assert.strictEqual(looksLikeSecret('token=Ab1!xYz9'), false);
+});
+
+test('强密码规则的熵门槛：重复模式不判定', () => {
+  assert.strictEqual(looksLikeSecret('Aa1!aaaaaaaa'), false);
 });
 
 test('无空格/换行要求：含空白即不判定', () => {
@@ -47,6 +63,14 @@ test('高熵 3 类以上无空白字符串判定为疑似密码', () => {
 test('普通中文文本/英文句子不判定', () => {
   assert.strictEqual(looksLikeSecret('这是一段普通的中文文本内容用于测试检测器的误报率'), false);
   assert.strictEqual(looksLikeSecret('the quick brown fox jumps over the lazy dog'), false);
+});
+
+test('常见误报形态排除：日期/UUID/哈希/命名串', () => {
+  assert.strictEqual(looksLikeSecret('2026-10-16-release-notes'), false); // 日期文件名
+  assert.strictEqual(looksLikeSecret('Report2024-10-16-final'), false);  // 含日期
+  assert.strictEqual(looksLikeSecret('550e8400-e29b-41d4-a716-446655440000'), false); // UUID
+  assert.strictEqual(looksLikeSecret('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'), false); // sha256
+  assert.strictEqual(looksLikeSecret('my-project_v2-final'), false);     // kebab/snake 命名
 });
 
 test('Shannon 熵边界：低熵与混合串', () => {

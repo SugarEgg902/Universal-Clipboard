@@ -41,19 +41,19 @@ class ClipStore {
       'SELECT id FROM clips WHERE text = ? AND created_at >= ? AND created_at < ?'
     );
     this.listByDayStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, force_secret FROM clips WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC'
     );
     this.searchTextStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 500"
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin, force_secret FROM clips WHERE type = 'text' AND text LIKE ? ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 500"
     );
     this.searchPinyinStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' AND pinyin LIKE ? ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 500"
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin, force_secret FROM clips WHERE type = 'text' AND pinyin LIKE ? ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 500"
     );
     this.fuzzyScanStmt = this.db.prepare(
-      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin FROM clips WHERE type = 'text' ORDER BY created_at DESC, id DESC LIMIT 5000"
+      "SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, pinyin, force_secret FROM clips WHERE type = 'text' ORDER BY created_at DESC, id DESC LIMIT 5000"
     );
     this.getStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, source, origin_device_id, origin_id, host_seq FROM clips WHERE id = ?'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, force_secret, source, origin_device_id, origin_id, host_seq FROM clips WHERE id = ?'
     );
     this.deleteStmt = this.db.prepare('DELETE FROM clips WHERE id = ?');
     this.clearDayStmt = this.db.prepare('DELETE FROM clips WHERE created_at >= ? AND created_at < ?');
@@ -82,7 +82,7 @@ class ClipStore {
       'SELECT id FROM clips WHERE pinned = 1 AND trigger_word IS NOT NULL AND lower(trigger_word) = lower(?) AND id != ?'
     );
     this.listSnippetsStmt = this.db.prepare(
-      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name FROM clips WHERE pinned = 1 ORDER BY created_at DESC, id DESC'
+      'SELECT id, text, created_at, type, image_path, width, height, pinned, trigger_word, group_name, force_secret FROM clips WHERE pinned = 1 ORDER BY created_at DESC, id DESC'
     );
     this.byOriginStmt = this.db.prepare(
       'SELECT id FROM clips WHERE origin_device_id = ? AND origin_id = ?'
@@ -146,6 +146,10 @@ class ClipStore {
     }
     if (!cols.includes('host_seq')) {
       this.db.exec('ALTER TABLE clips ADD COLUMN host_seq INTEGER');
+    }
+    if (!cols.includes('force_secret')) {
+      // 手动打码标记：NULL=自动启发式，1=强制打码，0=强制明文。仅本机，不参与同步
+      this.db.exec('ALTER TABLE clips ADD COLUMN force_secret INTEGER');
     }
     this.db.exec(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_origin ON clips(origin_device_id, origin_id)'
@@ -288,6 +292,16 @@ class ClipStore {
 
   unpin(id) {
     this.unpinStmt.run(id);
+    return true;
+  }
+
+  // 手动打码标记：value ∈ null(恢复自动) | 1(强制打码) | 0(强制明文)。
+  // 仅本机有效（force_secret 不进同步 payload）；条目不存在返回 false。
+  setSecretOverride(id, value) {
+    if (value !== null && value !== 0 && value !== 1) throw new Error('非法 force_secret 值');
+    const row = this.getStmt.get(id);
+    if (!row) return false;
+    this.db.prepare('UPDATE clips SET force_secret = ? WHERE id = ?').run(value, id);
     return true;
   }
 
